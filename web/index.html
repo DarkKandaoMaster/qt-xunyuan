@@ -20,16 +20,18 @@
     <section class="card" style="margin-top:14px">
       <div class="section-head"><div><h2>候选来源</h2><p>代理用于镜头检测与审核，永远不能进入交付目录。</p></div><button class="secondary" id="refresh">刷新</button></div>
       <div style="overflow:auto"><table class="source-table"><thead><tr><th>来源</th><th>目标</th><th>时长 / 分辨率</th><th>分数</th><th>状态</th><th>操作</th></tr></thead><tbody id="sources"></tbody></table></div>
+      <div class="pagination" id="sources-pagination"></div>
     </section>
     <section class="card" style="margin-top:14px">
       <div class="section-head"><div><h2>已分析来源</h2><p>镜头分析成功的来源会自动移入这里；如有误操作可移回候选来源。</p></div></div>
       <div style="overflow:auto"><table class="source-table"><thead><tr><th>来源</th><th>目标</th><th>时长 / 分辨率</th><th>候选片段</th><th>状态</th><th>操作</th></tr></thead><tbody id="analyzed-sources"></tbody></table></div>
+      <div class="pagination" id="analyzed-pagination"></div>
     </section>
     <section class="grid two-col">
-      <div class="card"><div class="section-head"><div><h2>已接受 · 最终处理</h2><p>下载高质量源、精确剪片、独立 QA 并整理目录。</p></div><button id="export" class="secondary">导出交付表</button></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>时长</th><th>操作</th></tr></thead><tbody id="accepted"></tbody></table></div></div>
-      <div class="card"><div class="section-head"><div><h2>已处理</h2><p>最终处理成功且已写入交付表的候选；可移回最终处理列表。</p></div></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>交付时间</th><th>操作</th></tr></thead><tbody id="processed"></tbody></table></div></div>
+      <div class="card"><div class="section-head"><div><h2>已接受 · 最终处理</h2><p>下载高质量源、精确剪片、独立 QA 并整理目录。</p></div><button id="export" class="secondary">导出交付表</button></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>时长</th><th>操作</th></tr></thead><tbody id="accepted"></tbody></table></div><div class="pagination" id="accepted-pagination"></div></div>
+      <div class="card"><div class="section-head"><div><h2>已处理</h2><p>最终处理成功且已写入交付表的候选；可移回最终处理列表。</p></div></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>交付时间</th><th>操作</th></tr></thead><tbody id="processed"></tbody></table></div><div class="pagination" id="processed-pagination"></div></div>
     </section>
-    <section class="card" style="margin-top:14px"><div class="section-head"><div><h2>最近拒绝</h2><p>误拒候选可恢复到审核队列。</p></div></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>操作</th></tr></thead><tbody id="rejected"></tbody></table></div></section>
+    <section class="card" style="margin-top:14px"><div class="section-head"><div><h2>最近拒绝</h2><p>误拒候选可恢复到审核队列。</p></div></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>操作</th></tr></thead><tbody id="rejected"></tbody></table></div><div class="pagination" id="rejected-pagination"></div></section>
   </main>
   <script src="/static/dashboard.js"></script>
 </body></html>

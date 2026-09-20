@@ -2,6 +2,8 @@ const $ = selector => document.querySelector(selector);
 const pollingJobs = new Set();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const fmtBytes = n => n > 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} GB` : `${(n / 1024 ** 2).toFixed(1)} MB`;
+const PAGE_SIZE = 20;
+const listPages = {sources: 1, analyzed: 1, accepted: 1, processed: 1, rejected: 1};
 
 async function api(url, options = {}) {
   const response = await fetch(url, {headers: {'Content-Type': 'application/json'}, ...options});
@@ -34,6 +36,17 @@ function humanError(raw = '') {
 
 function metric(name, value) { return `<div class="metric"><span>${name}</span><strong>${value}</strong></div>`; }
 
+function renderPagination(selector, key, data) {
+  const pageCount = Math.max(1, Math.ceil(Number(data.total || 0) / Number(data.page_size || PAGE_SIZE)));
+  listPages[key] = Number(data.page || 1);
+  $(selector).innerHTML = `<span>共 ${Number(data.total || 0)} 条 · 第 ${listPages[key]} / ${pageCount} 页</span><button onclick="changePage('${key}',${listPages[key] - 1})" ${listPages[key] <= 1 ? 'disabled' : ''}>上一页</button><button onclick="changePage('${key}',${listPages[key] + 1})" ${listPages[key] >= pageCount ? 'disabled' : ''}>下一页</button>`;
+}
+
+function changePage(key, page) {
+  listPages[key] = Math.max(1, page);
+  return ['sources', 'analyzed'].includes(key) ? loadSources() : loadQueues();
+}
+
 async function loadRules() {
   const data = await api('/api/rules');
   const options = ['<option value="">目标单元（可选）</option>', ...Object.entries(data.units).map(([id, unit]) =>
@@ -58,8 +71,8 @@ async function loadDashboard() {
 
 async function loadSources(startPolling = true) {
   const [candidateData, analyzedData] = await Promise.all([
-    api('/api/sources?view=candidate&limit=100'),
-    api('/api/sources?view=analyzed&limit=100')
+    api(`/api/sources?view=candidate&page=${listPages.sources}&page_size=${PAGE_SIZE}`),
+    api(`/api/sources?view=analyzed&page=${listPages.analyzed}&page_size=${PAGE_SIZE}`)
   ]);
   const items = candidateData.items;
   $('#sources').innerHTML = items.length ? items.map(source => {
@@ -73,6 +86,8 @@ async function loadSources(startPolling = true) {
     const error = source.error ? `<small class="source-error" title="${escapeHtml(source.error)}">${escapeHtml(humanError(source.error))}</small>` : '';
     return `<tr data-source-id="${source.id}"><td><strong>${escapeHtml(source.title || source.url)}</strong><small>${escapeHtml(source.uploader || source.url)}</small></td><td>${source.target_unit || '—'}<small>${escapeHtml(source.search_query || '')}</small></td><td>${source.duration ? `${Number(source.duration).toFixed(1)}s` : '—'}<small>${source.resolution || ''}</small></td><td>${Number(source.candidate_count || 0)}</td><td><span class="badge pass">已分析</span>${error}</td><td><button class="secondary" onclick="restoreSource(${source.id},this)">移回候选来源</button></td></tr>`;
   }).join('') : '<tr><td colspan="6" class="empty">暂无已分析来源。</td></tr>';
+  renderPagination('#sources-pagination', 'sources', candidateData);
+  renderPagination('#analyzed-pagination', 'analyzed', analyzedData);
   if (startPolling) for (const source of items) if (source.active_job_id) pollJob(Number(source.active_job_id), source.active_job_kind);
 }
 
@@ -117,9 +132,9 @@ async function restoreSource(id, button) { button.disabled = true; try { await a
 
 async function loadQueues() {
   const [accepted, processed, rejected] = await Promise.all([
-    api('/api/final-candidates?state=pending&limit=100'),
-    api('/api/final-candidates?state=processed&limit=100'),
-    api('/api/candidates?status=REJECTED&limit=30')
+    api(`/api/final-candidates?state=pending&page=${listPages.accepted}&page_size=${PAGE_SIZE}`),
+    api(`/api/final-candidates?state=processed&page=${listPages.processed}&page_size=${PAGE_SIZE}`),
+    api(`/api/candidates?status=REJECTED&page=${listPages.rejected}&page_size=${PAGE_SIZE}`)
   ]);
   $('#accepted').innerHTML = accepted.items.length ? accepted.items.map(candidate => {
     const finalized = candidate.qa_status === 'PASS';
@@ -128,6 +143,9 @@ async function loadQueues() {
   }).join('') : '<tr><td colspan="4" class="empty">暂无待最终处理候选</td></tr>';
   $('#processed').innerHTML = processed.items.length ? processed.items.map(candidate => `<tr><td>#${candidate.id}<small>${escapeHtml(candidate.source_title)}</small></td><td>${candidate.candidate_unit || '—'} · ${candidate.candidate_viewpoint === 'first_person' ? '第一人称' : '第三人称'}</td><td>${new Date(candidate.exported_at).toLocaleString('zh-CN')}</td><td><button class="secondary" onclick="restoreProcessed(${candidate.id},this)">移回最终处理</button></td></tr>`).join('') : '<tr><td colspan="4" class="empty">暂无已处理候选。</td></tr>';
   $('#rejected').innerHTML = rejected.items.length ? rejected.items.map(candidate => `<tr><td>#${candidate.id}<small>${escapeHtml(candidate.source_title)}</small></td><td>${candidate.candidate_unit || '—'}</td><td><button class="secondary" onclick="restore(${candidate.id},this)">恢复</button></td></tr>`).join('') : '<tr><td colspan="3" class="empty">暂无拒绝记录</td></tr>';
+  renderPagination('#accepted-pagination', 'accepted', accepted);
+  renderPagination('#processed-pagination', 'processed', processed);
+  renderPagination('#rejected-pagination', 'rejected', rejected);
 }
 
 async function finalize(id, button) { button.disabled = true; notice('正在获取最终源、剪片并执行最终 QA；大文件可能需要较长时间…'); try { const data = await api(`/api/candidates/${id}/finalize`, {method: 'POST', body: '{}'}); notice(`最终 QA：${data.qa_status}${data.final_path ? '，已进入交付目录' : ''}`, data.qa_status !== 'PASS'); await Promise.all([loadQueues(), loadDashboard()]); } catch (error) { notice(error.message, true); button.disabled = false; } }

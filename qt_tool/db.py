@@ -233,10 +233,20 @@ class Database:
                  source.get("target_unit"), source.get("search_query"), float(source.get("source_score", 0))))
             return int(cur.lastrowid), True
 
-    def list_sources(self, limit: int = 100, view: str = "all") -> list[dict[str, Any]]:
+    @staticmethod
+    def _source_where(view: str) -> str:
         where = {"candidate": "WHERE s.analysis_completed=0", "analyzed": "WHERE s.analysis_completed=1", "all": ""}.get(view)
         if where is None:
             raise ValueError("来源列表类型必须是 candidate、analyzed 或 all")
+        return where
+
+    def count_sources(self, view: str = "all") -> int:
+        where = self._source_where(view)
+        with self.connect() as con:
+            return int(con.execute("SELECT COUNT(*) FROM sources s " + where).fetchone()[0])
+
+    def list_sources(self, limit: int = 20, view: str = "all", offset: int = 0) -> list[dict[str, Any]]:
+        where = self._source_where(view)
         with self.connect() as con:
             return [dict(r) for r in con.execute("""SELECT s.*,
                 (SELECT COUNT(*) FROM candidate_shots c WHERE c.source_id=s.id) candidate_count,
@@ -244,7 +254,7 @@ class Database:
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_id,
                 (SELECT j.kind FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze')
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_kind
-                FROM sources s """ + where + " ORDER BY s.source_score DESC,s.id DESC LIMIT ?", (limit,))]
+                FROM sources s """ + where + " ORDER BY s.source_score DESC,s.id DESC LIMIT ? OFFSET ?", (limit, offset))]
 
     def get_source(self, source_id: int) -> dict[str, Any] | None:
         with self.connect() as con:
@@ -356,28 +366,44 @@ class Database:
                               (candidate_id,)).fetchone()
             return self._dict(row)
 
-    def list_candidates(self, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def count_candidates(self, status: str | None = None) -> int:
+        where, args = ("WHERE status=?", [status]) if status else ("", [])
+        with self.connect() as con:
+            return int(con.execute(f"SELECT COUNT(*) FROM candidate_shots {where}", args).fetchone()[0])
+
+    def list_candidates(self, status: str | None = None, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         where, args = ("WHERE c.status=?", [status]) if status else ("", [])
         with self.connect() as con:
             rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url FROM candidate_shots c
                                     JOIN sources s ON s.id=c.source_id {where}
-                                    ORDER BY c.score DESC,c.id ASC LIMIT ?""", args + [limit]).fetchall()
+                                    ORDER BY c.score DESC,c.id ASC LIMIT ? OFFSET ?""", args + [limit, offset]).fetchall()
             return [dict(r) for r in rows]
 
-    def list_final_candidates(self, state: str, limit: int = 100) -> list[dict[str, Any]]:
+    @staticmethod
+    def _final_where(state: str) -> str:
         if state == "pending":
-            where = "c.status='ACCEPTED' OR (f.qa_status='PASS' AND f.exported_at IS NULL)"
+            return "c.status='ACCEPTED' OR (f.qa_status='PASS' AND f.exported_at IS NULL)"
         elif state == "processed":
-            where = "f.qa_status='PASS' AND f.exported_at IS NOT NULL"
-        else:
-            raise ValueError("最终处理列表状态必须是 pending 或 processed")
+            return "f.qa_status='PASS' AND f.exported_at IS NOT NULL"
+        raise ValueError("最终处理列表状态必须是 pending 或 processed")
+
+    def count_final_candidates(self, state: str) -> int:
+        where = self._final_where(state)
+        with self.connect() as con:
+            return int(con.execute(f"""SELECT COUNT(*) FROM candidate_shots c
+                                       LEFT JOIN final_clips f ON f.candidate_id=c.id
+                                       WHERE {where}""").fetchone()[0])
+
+    def list_final_candidates(self, state: str, limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
+        where = self._final_where(state)
         with self.connect() as con:
             rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url,
                                     f.qa_status,f.final_path,f.exported_at
                                     FROM candidate_shots c JOIN sources s ON s.id=c.source_id
                                     LEFT JOIN final_clips f ON f.candidate_id=c.id
                                     WHERE {where}
-                                    ORDER BY COALESCE(f.exported_at,c.created_at) DESC,c.id DESC LIMIT ?""", (limit,)).fetchall()
+                                    ORDER BY COALESCE(f.exported_at,c.created_at) DESC,c.id DESC LIMIT ? OFFSET ?""",
+                               (limit, offset)).fetchall()
             return [dict(r) for r in rows]
 
     def save_rule_results(self, candidate_id: int, results: list[dict[str, Any]], stage: str = "candidate") -> None:

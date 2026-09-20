@@ -77,6 +77,13 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("请求体过大")
         return json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
 
+    @staticmethod
+    def _pagination(query: dict[str, list[str]], total: int, default_size: int = 20) -> tuple[int, int, int]:
+        page_size = max(1, min(500, int(query.get("page_size", query.get("limit", [default_size]))[0])))
+        page_count = max(1, (total + page_size - 1) // page_size)
+        page = min(page_count, max(1, int(query.get("page", [1])[0])))
+        return page, page_size, (page - 1) * page_size
+
     def _error(self, exc: Exception) -> None:
         traceback.print_exc()
         code = HTTPStatus.NOT_FOUND if isinstance(exc, (KeyError, FileNotFoundError)) else HTTPStatus.BAD_REQUEST
@@ -95,8 +102,11 @@ class Handler(BaseHTTPRequestHandler):
                                    "quota": self._quota(), "traffic_warning_bytes": int(self.app.settings.daily_traffic_warning_gb * 1024**3)})
             if path == "/api/sources":
                 q = parse_qs(parsed.query)
-                return self._json({"ok": True, "items": self.app.db.list_sources(
-                    int(q.get("limit", [100])[0]), q.get("view", ["all"])[0])})
+                view = q.get("view", ["all"])[0]
+                total = self.app.db.count_sources(view)
+                page, page_size, offset = self._pagination(q, total)
+                return self._json({"ok": True, "items": self.app.db.list_sources(page_size, view, offset),
+                                   "total": total, "page": page, "page_size": page_size})
             if match := re.fullmatch(r"/api/jobs/(\d+)", path):
                 job = self.app.db.get_job(int(match.group(1)))
                 if not job:
@@ -108,11 +118,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "job": job})
             if path == "/api/candidates":
                 q = parse_qs(parsed.query)
-                return self._json({"ok": True, "items": self.app.db.list_candidates(q.get("status", [None])[0], int(q.get("limit", [100])[0]))})
+                status = q.get("status", [None])[0]
+                total = self.app.db.count_candidates(status)
+                page, page_size, offset = self._pagination(q, total, 100)
+                return self._json({"ok": True, "items": self.app.db.list_candidates(status, page_size, offset),
+                                   "total": total, "page": page, "page_size": page_size})
             if path == "/api/final-candidates":
                 q = parse_qs(parsed.query)
-                return self._json({"ok": True, "items": self.app.db.list_final_candidates(
-                    q.get("state", ["pending"])[0], int(q.get("limit", [100])[0]))})
+                state = q.get("state", ["pending"])[0]
+                total = self.app.db.count_final_candidates(state)
+                page, page_size, offset = self._pagination(q, total)
+                return self._json({"ok": True, "items": self.app.db.list_final_candidates(state, page_size, offset),
+                                   "total": total, "page": page, "page_size": page_size})
             if match := re.fullmatch(r"/api/candidates/(\d+)", path):
                 candidate_id = int(match.group(1))
                 item = self.app.db.get_candidate(candidate_id)

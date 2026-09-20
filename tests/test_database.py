@@ -95,6 +95,17 @@ class DatabaseTests(unittest.TestCase):
             db.update_source(source_id, analysis_completed=0)
             self.assertEqual([row["id"] for row in db.list_sources(view="candidate")], [source_id])
 
+    def test_source_pagination_uses_limit_offset_and_total(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "test.sqlite3")
+            for index in range(25):
+                db.add_source({"platform": "youtube", "video_id": f"page-{index}",
+                               "url": f"https://example.test/{index}", "title": str(index)})
+
+            self.assertEqual(db.count_sources("candidate"), 25)
+            self.assertEqual(len(db.list_sources(20, "candidate", 0)), 20)
+            self.assertEqual(len(db.list_sources(20, "candidate", 20)), 5)
+
     def test_exported_candidate_moves_to_processed_and_can_be_restored(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "test.sqlite3")
