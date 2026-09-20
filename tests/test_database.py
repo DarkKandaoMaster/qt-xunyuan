@@ -79,6 +79,48 @@ class DatabaseTests(unittest.TestCase):
             self.assertIsNone(db.get_candidate(restored_id))
             self.assertIsNotNone(db.get_candidate(reviewed_id))
 
+    def test_source_moves_between_candidate_and_analyzed_lists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "test.sqlite3")
+            source_id, _ = db.add_source(
+                {"platform": "youtube", "video_id": "source-state", "url": "https://example.test/v", "title": "A"}
+            )
+            self.assertEqual([row["id"] for row in db.list_sources(view="candidate")], [source_id])
+            self.assertEqual(db.list_sources(view="analyzed"), [])
+
+            db.update_source(source_id, analysis_completed=1)
+            self.assertEqual(db.list_sources(view="candidate"), [])
+            self.assertEqual([row["id"] for row in db.list_sources(view="analyzed")], [source_id])
+
+            db.update_source(source_id, analysis_completed=0)
+            self.assertEqual([row["id"] for row in db.list_sources(view="candidate")], [source_id])
+
+    def test_exported_candidate_moves_to_processed_and_can_be_restored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "test.sqlite3")
+            source_id, _ = db.add_source(
+                {"platform": "youtube", "video_id": "delivery-state", "url": "https://example.test/v", "title": "A"}
+            )
+            candidate_id, _ = db.add_candidate({"source_id": source_id, "start_time": 0.0, "end_time": 10.0,
+                                                 "duration": 10.0, "status": "DELIVERABLE", "facts": {}})
+            db.create_final_clip(candidate_id, duration=10.0, width=3840, height=2160, fps=30,
+                                 has_audio=1, qa_status="PASS", deliverable_status="READY")
+
+            self.assertEqual([row["id"] for row in db.list_final_candidates("pending")], [candidate_id])
+            self.assertEqual(db.list_final_candidates("processed"), [])
+
+            db.mark_delivery_exported([candidate_id])
+            self.assertEqual(db.list_final_candidates("pending"), [])
+            processed = db.list_final_candidates("processed")
+            self.assertEqual([row["id"] for row in processed], [candidate_id])
+            first_export_time = processed[0]["exported_at"]
+            db.mark_delivery_exported([candidate_id], "2099-01-01T00:00:00+00:00")
+            self.assertEqual(db.list_final_candidates("processed")[0]["exported_at"], first_export_time)
+
+            db.restore_exported_candidate(candidate_id)
+            self.assertEqual([row["id"] for row in db.list_final_candidates("pending")], [candidate_id])
+            self.assertEqual(db.list_final_candidates("processed"), [])
+
 
 if __name__ == "__main__":
     unittest.main()

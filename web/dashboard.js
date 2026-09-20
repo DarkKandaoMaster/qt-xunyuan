@@ -57,7 +57,11 @@ async function loadDashboard() {
 }
 
 async function loadSources(startPolling = true) {
-  const {items} = await api('/api/sources');
+  const [candidateData, analyzedData] = await Promise.all([
+    api('/api/sources?view=candidate&limit=100'),
+    api('/api/sources?view=analyzed&limit=100')
+  ]);
+  const items = candidateData.items;
   $('#sources').innerHTML = items.length ? items.map(source => {
     const active = Boolean(source.active_job_id);
     const downloading = source.active_job_kind === 'proxy';
@@ -65,6 +69,10 @@ async function loadSources(startPolling = true) {
     const error = source.error ? `<small class="source-error" title="${escapeHtml(source.error)}">${escapeHtml(humanError(source.error))}</small>` : '';
     return `<tr data-source-id="${source.id}"><td><strong>${escapeHtml(source.title || source.url)}</strong><small>${escapeHtml(source.uploader || source.url)}</small></td><td>${source.target_unit || '—'}<small>${escapeHtml(source.search_query || '')}</small></td><td>${source.duration ? `${Number(source.duration).toFixed(1)}s` : '—'}<small>${source.resolution || ''}</small></td><td>${Number(source.source_score || 0).toFixed(0)}</td><td><span class="badge ${source.status === 'ERROR' ? 'fail' : active ? 'warn' : ''}">${source.status}</span>${error}</td><td><div class="toolbox"><button class="secondary" onclick="proxy(${source.id},this)" ${source.proxy_path || active ? 'disabled' : ''}>${downloading ? '下载中…' : source.proxy_path ? '代理已就绪' : source.status === 'ERROR' ? '重试下载' : '下载代理'}</button><button onclick="analyze(${source.id},this)" ${!source.proxy_path || active ? 'disabled' : ''}>${analyzing ? '分析中…' : '镜头分析'}</button></div></td></tr>`;
   }).join('') : '<tr><td colspan="6" class="empty">尚无来源。可自动搜索或导入一个公开 URL。</td></tr>';
+  $('#analyzed-sources').innerHTML = analyzedData.items.length ? analyzedData.items.map(source => {
+    const error = source.error ? `<small class="source-error" title="${escapeHtml(source.error)}">${escapeHtml(humanError(source.error))}</small>` : '';
+    return `<tr data-source-id="${source.id}"><td><strong>${escapeHtml(source.title || source.url)}</strong><small>${escapeHtml(source.uploader || source.url)}</small></td><td>${source.target_unit || '—'}<small>${escapeHtml(source.search_query || '')}</small></td><td>${source.duration ? `${Number(source.duration).toFixed(1)}s` : '—'}<small>${source.resolution || ''}</small></td><td>${Number(source.candidate_count || 0)}</td><td><span class="badge pass">已分析</span>${error}</td><td><button class="secondary" onclick="restoreSource(${source.id},this)">移回候选来源</button></td></tr>`;
+  }).join('') : '<tr><td colspan="6" class="empty">暂无已分析来源。</td></tr>';
   if (startPolling) for (const source of items) if (source.active_job_id) pollJob(Number(source.active_job_id), source.active_job_kind);
 }
 
@@ -105,15 +113,26 @@ async function startSourceJob(kind, id, button) {
 
 function proxy(id, button) { return startSourceJob('proxy', id, button); }
 function analyze(id, button) { return startSourceJob('analyze', id, button); }
+async function restoreSource(id, button) { button.disabled = true; try { await api(`/api/sources/${id}/analysis-state`, {method: 'POST', body: JSON.stringify({completed: false})}); notice('已移回候选来源列表。'); await loadSources(); } catch (error) { notice(error.message, true); button.disabled = false; } }
 
 async function loadQueues() {
-  const [accepted, rejected] = await Promise.all([api('/api/candidates?status=ACCEPTED&limit=100'), api('/api/candidates?status=REJECTED&limit=30')]);
-  $('#accepted').innerHTML = accepted.items.length ? accepted.items.map(candidate => `<tr><td>#${candidate.id}<small>${escapeHtml(candidate.source_title)}</small></td><td>${candidate.candidate_unit || '—'} · ${candidate.candidate_viewpoint === 'first_person' ? '第一人称' : candidate.candidate_viewpoint === 'third_person' ? '第三人称' : '待定'}</td><td>${Number(candidate.duration).toFixed(1)}s</td><td><button onclick="finalize(${candidate.id},this)">最终处理</button></td></tr>`).join('') : '<tr><td colspan="4" class="empty">暂无已接受候选</td></tr>';
+  const [accepted, processed, rejected] = await Promise.all([
+    api('/api/final-candidates?state=pending&limit=100'),
+    api('/api/final-candidates?state=processed&limit=100'),
+    api('/api/candidates?status=REJECTED&limit=30')
+  ]);
+  $('#accepted').innerHTML = accepted.items.length ? accepted.items.map(candidate => {
+    const finalized = candidate.qa_status === 'PASS';
+    const qa = candidate.qa_status && candidate.qa_status !== 'PASS' ? `<small><span class="badge fail">QA ${candidate.qa_status}</span></small>` : finalized ? '<small><span class="badge warn">已处理，等待导出</span></small>' : '';
+    return `<tr><td>#${candidate.id}<small>${escapeHtml(candidate.source_title)}</small></td><td>${candidate.candidate_unit || '—'} · ${candidate.candidate_viewpoint === 'first_person' ? '第一人称' : candidate.candidate_viewpoint === 'third_person' ? '第三人称' : '待定'}</td><td>${Number(candidate.duration).toFixed(1)}s${qa}</td><td><button onclick="finalize(${candidate.id},this)">${finalized ? '重新处理' : '最终处理'}</button></td></tr>`;
+  }).join('') : '<tr><td colspan="4" class="empty">暂无待最终处理候选</td></tr>';
+  $('#processed').innerHTML = processed.items.length ? processed.items.map(candidate => `<tr><td>#${candidate.id}<small>${escapeHtml(candidate.source_title)}</small></td><td>${candidate.candidate_unit || '—'} · ${candidate.candidate_viewpoint === 'first_person' ? '第一人称' : '第三人称'}</td><td>${new Date(candidate.exported_at).toLocaleString('zh-CN')}</td><td><button class="secondary" onclick="restoreProcessed(${candidate.id},this)">移回最终处理</button></td></tr>`).join('') : '<tr><td colspan="4" class="empty">暂无已处理候选。</td></tr>';
   $('#rejected').innerHTML = rejected.items.length ? rejected.items.map(candidate => `<tr><td>#${candidate.id}<small>${escapeHtml(candidate.source_title)}</small></td><td>${candidate.candidate_unit || '—'}</td><td><button class="secondary" onclick="restore(${candidate.id},this)">恢复</button></td></tr>`).join('') : '<tr><td colspan="3" class="empty">暂无拒绝记录</td></tr>';
 }
 
 async function finalize(id, button) { button.disabled = true; notice('正在获取最终源、剪片并执行最终 QA；大文件可能需要较长时间…'); try { const data = await api(`/api/candidates/${id}/finalize`, {method: 'POST', body: '{}'}); notice(`最终 QA：${data.qa_status}${data.final_path ? '，已进入交付目录' : ''}`, data.qa_status !== 'PASS'); await Promise.all([loadQueues(), loadDashboard()]); } catch (error) { notice(error.message, true); button.disabled = false; } }
 async function restore(id, button) { button.disabled = true; try { await api(`/api/candidates/${id}/review`, {method: 'POST', body: JSON.stringify({decision: 'RESTORE', notes: '从拒绝列表恢复'})}); notice('已恢复到人工审核队列。'); await Promise.all([loadQueues(), loadDashboard()]); } catch (error) { notice(error.message, true); button.disabled = false; } }
+async function restoreProcessed(id, button) { button.disabled = true; try { await api(`/api/candidates/${id}/export-state`, {method: 'POST', body: JSON.stringify({processed: false})}); notice('已移回最终处理列表。'); await loadQueues(); } catch (error) { notice(error.message, true); button.disabled = false; } }
 
 async function submitForm(form, url) {
   const data = Object.fromEntries(new FormData(form)); if (data.limit) data.limit = Number(data.limit); notice('处理中…'); [...form.elements].forEach(element => element.disabled = true);
@@ -124,6 +143,6 @@ async function submitForm(form, url) {
 
 $('#discover-form').addEventListener('submit', event => { event.preventDefault(); submitForm(event.currentTarget, '/api/sources/discover'); });
 $('#import-form').addEventListener('submit', event => { event.preventDefault(); submitForm(event.currentTarget, '/api/sources/import'); });
-$('#export').onclick = async () => { try { const data = await api('/api/export', {method: 'POST', body: '{}'}); notice(`已导出 ${data.rows} 条：${data.path}`); } catch (error) { notice(error.message, true); } };
+$('#export').onclick = async () => { try { const data = await api('/api/export', {method: 'POST', body: '{}'}); notice(`已导出 ${data.rows} 条：${data.path}`); await Promise.all([loadQueues(), loadDashboard()]); } catch (error) { notice(error.message, true); } };
 $('#refresh').onclick = () => Promise.all([loadSources(), loadDashboard(), loadQueues()]);
 Promise.all([loadRules(), loadSources(), loadDashboard(), loadQueues()]).catch(error => notice(error.message, true));

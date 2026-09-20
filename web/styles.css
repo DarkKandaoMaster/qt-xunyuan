@@ -55,9 +55,9 @@ th { color: var(--muted); font-size: 12px; font-weight: 600; }
 td small { display: block; color: var(--muted); max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toolbox { display: flex; flex-wrap: nowrap; gap: 6px; align-items: flex-start; }
 .toolbox button { min-width: 76px; padding-inline: 10px; white-space: nowrap; }
-#sources td:first-child { min-width: 340px; }
-#sources td:nth-child(5) { min-width: 230px; }
-#sources td:last-child { min-width: 168px; }
+.source-table td:first-child { min-width: 340px; }
+.source-table td:nth-child(5) { min-width: 180px; }
+.source-table td:last-child { min-width: 168px; }
 td small.source-error { margin-top: 5px; max-width: 520px; color: #ffb3ba; white-space: normal; overflow-wrap: anywhere; }
 .badge { display: inline-block; padding: 3px 7px; border-radius: 999px; font-size: 11px; background: #263044; color: #cbd5e4; }
 .badge.pass { background: #17372c; color: #8ce8c5; }

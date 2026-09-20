@@ -94,7 +94,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "dashboard": self.app.db.dashboard(), "tools": tool_status(self.app.settings),
                                    "quota": self._quota(), "traffic_warning_bytes": int(self.app.settings.daily_traffic_warning_gb * 1024**3)})
             if path == "/api/sources":
-                return self._json({"ok": True, "items": self.app.db.list_sources(int(parse_qs(parsed.query).get("limit", [100])[0]))})
+                q = parse_qs(parsed.query)
+                return self._json({"ok": True, "items": self.app.db.list_sources(
+                    int(q.get("limit", [100])[0]), q.get("view", ["all"])[0])})
             if match := re.fullmatch(r"/api/jobs/(\d+)", path):
                 job = self.app.db.get_job(int(match.group(1)))
                 if not job:
@@ -107,6 +109,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/candidates":
                 q = parse_qs(parsed.query)
                 return self._json({"ok": True, "items": self.app.db.list_candidates(q.get("status", [None])[0], int(q.get("limit", [100])[0]))})
+            if path == "/api/final-candidates":
+                q = parse_qs(parsed.query)
+                return self._json({"ok": True, "items": self.app.db.list_final_candidates(
+                    q.get("state", ["pending"])[0], int(q.get("limit", [100])[0]))})
             if match := re.fullmatch(r"/api/candidates/(\d+)", path):
                 candidate_id = int(match.group(1))
                 item = self.app.db.get_candidate(candidate_id)
@@ -143,6 +149,13 @@ class Handler(BaseHTTPRequestHandler):
             if match := re.fullmatch(r"/api/sources/(\d+)/analyze", path):
                 job_id, created = self.app.queue_source_job("analyze", int(match.group(1)))
                 return self._json({"ok": True, "job_id": job_id, "created": created, "status": "QUEUED"}, 202)
+            if match := re.fullmatch(r"/api/sources/(\d+)/analysis-state", path):
+                source_id = int(match.group(1))
+                if not self.app.db.get_source(source_id):
+                    raise KeyError("来源不存在")
+                completed = bool(data.get("completed"))
+                self.app.db.update_source(source_id, analysis_completed=int(completed))
+                return self._json({"ok": True, "analysis_completed": completed})
             if match := re.fullmatch(r"/api/candidates/(\d+)/review", path):
                 candidate_id = int(match.group(1))
                 if data.get("decision", "").upper() == "ACCEPT":
@@ -157,6 +170,12 @@ class Handler(BaseHTTPRequestHandler):
                 candidate_id = int(match.group(1))
                 result = self.app.pipeline.final_qa_and_deliver(candidate_id)
                 return self._json({"ok": True, **result})
+            if match := re.fullmatch(r"/api/candidates/(\d+)/export-state", path):
+                candidate_id = int(match.group(1))
+                if data.get("processed") is not False:
+                    raise ValueError("目前只支持将已处理候选移回最终处理列表")
+                self.app.db.restore_exported_candidate(candidate_id)
+                return self._json({"ok": True, "processed": False})
             if path == "/api/export":
                 output = self.app.pipeline.export_delivery_csv()
                 return self._json({"ok": True, "path": str(output), "rows": len(self.app.db.delivery_rows())})
@@ -198,6 +217,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", f"{content_type}; charset=utf-8" if content_type.startswith("text/") else content_type)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 

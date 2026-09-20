@@ -21,14 +21,22 @@ class MediaTests(unittest.TestCase):
 
     def test_delivery_csv_uses_required_chinese_columns(self):
         row = {
+            "candidate_id": 42,
             "viewpoint": "third_person", "created_at": "2026-09-20T10:00:00+00:00",
+            "exported_at": "2026-09-20T11:00:00+00:00",
             "unit": "T1.1", "width": 3840, "height": 2160, "duration": 12.3456,
         }
 
         class DeliveryDB:
+            exported_ids = []
+
             @staticmethod
             def delivery_rows():
                 return [row]
+
+            @classmethod
+            def mark_delivery_exported(cls, candidate_ids, exported_at=None):
+                cls.exported_ids = candidate_ids
 
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)
@@ -41,9 +49,11 @@ class MediaTests(unittest.TestCase):
         self.assertEqual(list(exported[0]), ["人称", "OSS路径", "交付时间", "统合单元", "分辨率", "时长"])
         self.assertEqual(exported[0]["人称"], "第三人称")
         self.assertEqual(exported[0]["OSS路径"], "OSS")
+        self.assertEqual(exported[0]["交付时间"], "2026-09-20T11:00:00+00:00")
         self.assertEqual(exported[0]["统合单元"], "T1.1")
         self.assertEqual(exported[0]["分辨率"], "3840x2160")
         self.assertEqual(exported[0]["时长"], "12.346")
+        self.assertEqual(DeliveryDB.exported_ids, [42])
 
 
 if __name__ == "__main__":

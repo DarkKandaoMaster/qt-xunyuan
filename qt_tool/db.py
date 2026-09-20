@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS sources (
   source_score REAL NOT NULL DEFAULT 0,
   proxy_path TEXT,
   original_path TEXT,
+  analysis_completed INTEGER NOT NULL DEFAULT 0,
   error TEXT,
   UNIQUE(platform, video_id)
 );
@@ -123,6 +124,7 @@ CREATE TABLE IF NOT EXISTS final_clips (
   has_audio INTEGER,
   qa_status TEXT NOT NULL DEFAULT 'PENDING',
   deliverable_status TEXT NOT NULL DEFAULT 'PENDING',
+  exported_at TEXT,
   qa_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL
 );
@@ -169,6 +171,14 @@ class Database:
             columns = {row[1] for row in con.execute("PRAGMA table_info(jobs)")}
             if "result_json" not in columns:
                 con.execute("ALTER TABLE jobs ADD COLUMN result_json TEXT NOT NULL DEFAULT '{}'")
+            source_columns = {row[1] for row in con.execute("PRAGMA table_info(sources)")}
+            if "analysis_completed" not in source_columns:
+                con.execute("ALTER TABLE sources ADD COLUMN analysis_completed INTEGER NOT NULL DEFAULT 0")
+                con.execute("""UPDATE sources SET analysis_completed=1
+                               WHERE EXISTS (SELECT 1 FROM candidate_shots c WHERE c.source_id=sources.id)""")
+            final_columns = {row[1] for row in con.execute("PRAGMA table_info(final_clips)")}
+            if "exported_at" not in final_columns:
+                con.execute("ALTER TABLE final_clips ADD COLUMN exported_at TEXT")
             self._migrate_proxy_r9_results(con)
 
     @staticmethod
@@ -223,21 +233,25 @@ class Database:
                  source.get("target_unit"), source.get("search_query"), float(source.get("source_score", 0))))
             return int(cur.lastrowid), True
 
-    def list_sources(self, limit: int = 100) -> list[dict[str, Any]]:
+    def list_sources(self, limit: int = 100, view: str = "all") -> list[dict[str, Any]]:
+        where = {"candidate": "WHERE s.analysis_completed=0", "analyzed": "WHERE s.analysis_completed=1", "all": ""}.get(view)
+        if where is None:
+            raise ValueError("来源列表类型必须是 candidate、analyzed 或 all")
         with self.connect() as con:
             return [dict(r) for r in con.execute("""SELECT s.*,
+                (SELECT COUNT(*) FROM candidate_shots c WHERE c.source_id=s.id) candidate_count,
                 (SELECT j.id FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze')
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_id,
                 (SELECT j.kind FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze')
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_kind
-                FROM sources s ORDER BY s.source_score DESC,s.id DESC LIMIT ?""", (limit,))]
+                FROM sources s """ + where + " ORDER BY s.source_score DESC,s.id DESC LIMIT ?", (limit,))]
 
     def get_source(self, source_id: int) -> dict[str, Any] | None:
         with self.connect() as con:
             return self._dict(con.execute("SELECT * FROM sources WHERE id=?", (source_id,)).fetchone())
 
     def update_source(self, source_id: int, **fields: Any) -> None:
-        allowed = {"status", "proxy_path", "original_path", "error", "duration", "resolution", "metadata_json", "source_score"}
+        allowed = {"status", "proxy_path", "original_path", "analysis_completed", "error", "duration", "resolution", "metadata_json", "source_score"}
         pairs = [(k, v) for k, v in fields.items() if k in allowed]
         if not pairs:
             return
@@ -350,6 +364,22 @@ class Database:
                                     ORDER BY c.score DESC,c.id ASC LIMIT ?""", args + [limit]).fetchall()
             return [dict(r) for r in rows]
 
+    def list_final_candidates(self, state: str, limit: int = 100) -> list[dict[str, Any]]:
+        if state == "pending":
+            where = "c.status='ACCEPTED' OR (f.qa_status='PASS' AND f.exported_at IS NULL)"
+        elif state == "processed":
+            where = "f.qa_status='PASS' AND f.exported_at IS NOT NULL"
+        else:
+            raise ValueError("最终处理列表状态必须是 pending 或 processed")
+        with self.connect() as con:
+            rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url,
+                                    f.qa_status,f.final_path,f.exported_at
+                                    FROM candidate_shots c JOIN sources s ON s.id=c.source_id
+                                    LEFT JOIN final_clips f ON f.candidate_id=c.id
+                                    WHERE {where}
+                                    ORDER BY COALESCE(f.exported_at,c.created_at) DESC,c.id DESC LIMIT ?""", (limit,)).fetchall()
+            return [dict(r) for r in rows]
+
     def save_rule_results(self, candidate_id: int, results: list[dict[str, Any]], stage: str = "candidate") -> None:
         with self.connect() as con:
             con.execute("DELETE FROM rule_results WHERE candidate_id=? AND stage=?", (candidate_id, stage))
@@ -413,19 +443,37 @@ class Database:
                                  VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                                  ON CONFLICT(candidate_id) DO UPDATE SET original_path=excluded.original_path,final_path=excluded.final_path,
                                  duration=excluded.duration,width=excluded.width,height=excluded.height,fps=excluded.fps,has_audio=excluded.has_audio,
-                                 qa_status=excluded.qa_status,deliverable_status=excluded.deliverable_status,qa_json=excluded.qa_json
+                                 qa_status=excluded.qa_status,deliverable_status=excluded.deliverable_status,qa_json=excluded.qa_json,
+                                 exported_at=NULL
                                  RETURNING id""",
                               (candidate_id, fields.get("original_path"), fields.get("final_path"), fields.get("duration"), fields.get("width"),
                                fields.get("height"), fields.get("fps"), fields.get("has_audio"), fields.get("qa_status", "PENDING"),
                                fields.get("deliverable_status", "PENDING"), json.dumps(fields.get("qa", {}), ensure_ascii=False), now()))
             return int(cur.fetchone()[0])
 
+    def mark_delivery_exported(self, candidate_ids: list[int], exported_at: str | None = None) -> None:
+        if not candidate_ids:
+            return
+        placeholders = ",".join("?" for _ in candidate_ids)
+        with self.connect() as con:
+            con.execute(f"""UPDATE final_clips SET exported_at=COALESCE(exported_at,?)
+                            WHERE candidate_id IN ({placeholders})""",
+                        [exported_at or now(), *candidate_ids])
+
+    def restore_exported_candidate(self, candidate_id: int) -> None:
+        with self.connect() as con:
+            row = con.execute("SELECT qa_status,exported_at FROM final_clips WHERE candidate_id=?", (candidate_id,)).fetchone()
+            if not row or row["qa_status"] != "PASS" or not row["exported_at"]:
+                raise ValueError("该候选不在已处理列表中")
+            con.execute("UPDATE final_clips SET exported_at=NULL WHERE candidate_id=?", (candidate_id,))
+
     def delivery_rows(self) -> list[dict[str, Any]]:
         with self.connect() as con:
             rows = con.execute("""SELECT c.id candidate_id,c.candidate_bucket bucket,c.candidate_unit unit,
                 c.candidate_viewpoint viewpoint,c.start_time,c.end_time,c.duration candidate_duration,c.duration_bucket,
                 s.url source_url,s.platform,s.video_id,s.title source_title,
-                f.final_path,f.duration,f.width,f.height,f.fps,f.has_audio,f.qa_status,f.deliverable_status,f.created_at,
+                f.final_path,f.duration,f.width,f.height,f.fps,f.has_audio,f.qa_status,f.deliverable_status,
+                f.created_at,f.exported_at,
                 (SELECT notes FROM reviews r WHERE r.candidate_id=c.id ORDER BY r.id DESC LIMIT 1) notes
                 FROM final_clips f JOIN candidate_shots c ON c.id=f.candidate_id JOIN sources s ON s.id=c.source_id
                 WHERE f.qa_status='PASS' ORDER BY c.candidate_bucket,c.candidate_viewpoint,c.id""").fetchall()

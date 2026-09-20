@@ -7,7 +7,7 @@ import math
 import re
 import shutil
 import subprocess
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -279,7 +279,7 @@ class MediaPipeline:
                 if self.rules.automatic_reject(results):
                     self.db.review(cid, {"decision": "REJECT", "notes": "程序确定性硬规则自动淘汰"})
                 created_ids.append(cid)
-        self.db.update_source(source_id, status="WAITING_REVIEW", error=None)
+        self.db.update_source(source_id, status="WAITING_REVIEW", analysis_completed=1, error=None)
         return created_ids
 
     def representative_frame_hash(self, path: Path, at_seconds: float) -> str | None:
@@ -396,6 +396,7 @@ class MediaPipeline:
 
     def export_delivery_csv(self) -> Path:
         rows = self.db.delivery_rows()
+        delivery_time = datetime.now(UTC).isoformat()
         output = self.settings.data_dir / "deliverable" / "QT寻源数据_交付信息表.csv"
         fields = ["人称", "OSS路径", "交付时间", "统合单元", "分辨率", "时长"]
         try:
@@ -413,11 +414,12 @@ class MediaPipeline:
                 writer.writerow({
                     "人称": "第一人称" if row["viewpoint"] == "first_person" else "第三人称",
                     "OSS路径": "OSS",
-                    "交付时间": row["created_at"],
+                    "交付时间": row.get("exported_at") or delivery_time,
                     "统合单元": row["unit"],
                     "分辨率": f"{row['width']}x{row['height']}",
                     "时长": round(float(row["duration"] or 0), 3),
                 })
+        self.db.mark_delivery_exported([int(row["candidate_id"]) for row in rows], delivery_time)
         return output
 
     def _clip_path(self, candidate: dict[str, Any]) -> Path:
