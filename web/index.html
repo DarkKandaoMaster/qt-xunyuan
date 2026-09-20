@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QT 视频生产工具</title><link rel="stylesheet" href="/static/styles.css"></head>
+<body>
+  <header class="topbar"><div class="brand">QT 视频数据生产工具 <small>本地 MVP</small></div><nav class="nav"><a class="active" href="/">生产台</a><a href="/review">人工审核</a></nav></header>
+  <main class="page">
+    <section class="grid metrics" id="metrics"></section>
+    <section class="grid two-col">
+      <div class="card">
+        <div class="section-head"><div><h2>寻源与导入</h2><p>先元数据，再代理；只有人工接受后才下载高质量源。</p></div><div class="toolbox" id="tools"></div></div>
+        <form id="discover-form" class="form-row"><input name="query" placeholder="英文搜索词，如 parkour tracking shot 4k" required><select name="target_unit" id="discover-unit"></select><input name="limit" type="number" min="1" max="50" value="10"><button>自动搜索</button></form>
+        <form id="import-form" class="form-row" style="margin-top:8px"><input name="url" placeholder="公开可访问视频 URL" required><select name="target_unit" id="import-unit"></select><span></span><button class="secondary">导入 URL</button></form>
+        <div class="notice" id="notice"></div>
+      </div>
+      <div class="card">
+        <div class="section-head"><div><h2>配额策略</h2><p>桶级人称为硬约束；三档各不得低于 20%。</p></div></div>
+        <div id="quota"></div>
+      </div>
+    </section>
+    <section class="card" style="margin-top:14px">
+      <div class="section-head"><div><h2>候选来源</h2><p>代理用于镜头检测与审核，永远不能进入交付目录。</p></div><button class="secondary" id="refresh">刷新</button></div>
+      <div style="overflow:auto"><table><thead><tr><th>来源</th><th>目标</th><th>时长 / 分辨率</th><th>分数</th><th>状态</th><th>操作</th></tr></thead><tbody id="sources"></tbody></table></div>
+    </section>
+    <section class="grid two-col">
+      <div class="card"><div class="section-head"><div><h2>已接受 · 最终处理</h2><p>下载高质量源、精确剪片、独立 QA 并整理目录。</p></div><button id="export" class="secondary">导出交付表</button></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>时长</th><th>操作</th></tr></thead><tbody id="accepted"></tbody></table></div></div>
+      <div class="card"><div class="section-head"><div><h2>最近拒绝</h2><p>误拒候选可恢复到审核队列。</p></div></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>操作</th></tr></thead><tbody id="rejected"></tbody></table></div></div>
+    </section>
+  </main>
+  <script src="/static/dashboard.js"></script>
+</body></html>

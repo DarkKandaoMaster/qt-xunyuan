@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "source_document": "QT寻源数据规则（供应商用）.pdf",
+  "conflicts": [
+    {
+      "id": "CONFLICT-001",
+      "title": "第35页子单元范围与第四章详细规则不一致",
+      "pages": [20, 21, 26, 30, 35],
+      "type": "unit_scope",
+      "listed_but_missing_detail": ["T3.6", "T4.5", "T4.6", "T8.5"],
+      "detailed_but_missing_from_list": ["T5.6", "T5.7", "T7.6", "T7.7", "T7.8", "T9.5"],
+      "temporary_policy": "按第四章详细规则录入；超出第五章范围的单元 requires_confirmation=true。仅在第五章出现但无详细规则的单元不可使用。",
+      "automatic_decision": false
+    },
+    {
+      "id": "CONFLICT-002",
+      "title": "R13 地面视角与 T8.2 航拍合格标准冲突",
+      "pages": [5, 27],
+      "type": "rule_exception",
+      "when": {"unit": "T8.2", "aerial": true},
+      "temporary_policy": "标记 CONFLICT，人工确认，不得自动交付。",
+      "automatic_decision": false
+    },
+    {
+      "id": "CONFLICT-003",
+      "title": "时长档位 15.0 秒与 30.0 秒边界重叠",
+      "pages": [6, 31, 32, 37],
+      "type": "duration_boundary",
+      "values_seconds": [15.0, 30.0],
+      "temporary_policy": "剪片主动规避精确边界；无法规避则标记 CONFLICT 并人工确认。",
+      "automatic_decision": false
+    }
+  ]
+}
+

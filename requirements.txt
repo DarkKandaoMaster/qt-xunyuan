@@ -1,0 +1,7 @@
+# The application core intentionally uses only Python's standard library.
+# Install these command-line tools separately for the production pipeline:
+#   ffmpeg / ffprobe
+#   yt-dlp
+# Optional, for higher quality shot detection:
+#   scenedetect[opencv]
+
