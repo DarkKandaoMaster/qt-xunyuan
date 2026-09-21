@@ -47,6 +47,18 @@ class MediaTests(unittest.TestCase):
             setattr(settings, key, value)
         return MediaPipeline(settings, None, None)
 
+    def test_ffmpeg_location_is_resolved_from_path_not_dot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            bare = self._ytdlp_pipeline(data_dir, ffmpeg_bin="ffmpeg")
+            command = bare._ytdlp("--skip-download")
+            if "--ffmpeg-location" in command:
+                location = command[command.index("--ffmpeg-location") + 1]
+                self.assertNotEqual(location, ".")
+                self.assertTrue(Path(location).is_dir())
+            missing = self._ytdlp_pipeline(data_dir, ffmpeg_bin="definitely-missing-ffmpeg")
+            self.assertNotIn("--ffmpeg-location", missing._ytdlp("--skip-download"))
+
     def test_cookies_file_is_preferred_over_browser_profile(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)

@@ -55,6 +55,20 @@ def _command_exists(command: str) -> bool:
     return path.exists() if path.parent != Path(".") else shutil.which(command) is not None
 
 
+def _ffmpeg_location(ffmpeg_bin: str) -> str:
+    """Resolve the directory to pass as ``--ffmpeg-location``.
+
+    A bare command such as ``ffmpeg`` has ``Path("ffmpeg").parent == "."``; passing
+    ``.`` makes yt-dlp look only in the current directory, report ffmpeg as missing
+    and skip merging separate video/audio streams. Resolve through PATH instead and
+    return an empty string when nothing concrete is found (yt-dlp then uses PATH).
+    """
+    resolved = shutil.which(ffmpeg_bin)
+    if not resolved:
+        return ""
+    return str(Path(resolved).resolve().parent)
+
+
 def _run(args: list[str], timeout: int = 3600) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=timeout, check=False)
 
@@ -275,8 +289,9 @@ class MediaPipeline:
         command = [self.settings.ytdlp_bin, "--encoding", "utf-8"]
         if self.settings.ytdlp_js_runtime:
             command.extend(("--js-runtimes", self.settings.ytdlp_js_runtime))
-        if _command_exists(self.settings.ffmpeg_bin):
-            command.extend(("--ffmpeg-location", str(Path(self.settings.ffmpeg_bin).parent)))
+        ffmpeg_dir = _ffmpeg_location(self.settings.ffmpeg_bin)
+        if ffmpeg_dir:
+            command.extend(("--ffmpeg-location", ffmpeg_dir))
         if self.settings.ytdlp_proxy:
             command.extend(("--proxy", self.settings.ytdlp_proxy))
         if self.settings.ytdlp_po_token_url:
