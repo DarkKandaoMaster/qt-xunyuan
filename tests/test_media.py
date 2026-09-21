@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import csv
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
 from qt_tool.db import Database
-from qt_tool.media import (MediaPipeline, delivery_description, merge_facts,
-                           source_duration_allowed, ytdlp_error_message)
+from qt_tool.media import (DownloadStalled, MediaPipeline, _run_download,
+                           delivery_description, merge_facts,
+                           source_duration_allowed, source_live_reason,
+                           ytdlp_error_message)
 from qt_tool.subject import select_motion_valley, split_presence_samples
 
 
@@ -17,6 +20,30 @@ class MediaTests(unittest.TestCase):
         self.assertTrue(source_duration_allowed(None, 600))
         self.assertTrue(source_duration_allowed(600, 600))
         self.assertFalse(source_duration_allowed(600.1, 600))
+
+    def test_live_sources_are_detected_without_rejecting_finite_replays(self):
+        self.assertEqual(source_live_reason({"live_status": "is_live", "duration": None}), "正在直播")
+        self.assertEqual(source_live_reason({"title": "Ocean LIVE 24/7", "duration": None}),
+                         "疑似直播或无限循环视频")
+        self.assertIsNone(source_live_reason({"live_status": "was_live", "duration": 300}))
+
+    def test_stalled_download_is_terminated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(DownloadStalled):
+                _run_download([sys.executable, "-c", "import time; time.sleep(5)"],
+                              Path(tmp), "*.part", stall_timeout=1, timeout=10)
+
+    def test_legacy_live_source_is_rejected_before_job_download(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            db = Database(data_dir / "test.sqlite3")
+            source_id, _ = db.add_source({"platform": "youtube", "video_id": "live",
+                                          "url": "https://example.test/live", "title": "LIVE 24/7",
+                                          "metadata": {"live_status": "is_live"}})
+            pipeline = MediaPipeline(SimpleNamespace(data_dir=data_dir, source_max_duration_seconds=600,
+                                                      ytdlp_bin="missing-yt-dlp"), db, None)
+            with self.assertRaisesRegex(ValueError, "不支持下载正在直播"):
+                pipeline.validate_proxy_source(source_id)
 
     def test_ytdlp_errors_are_operator_friendly(self):
         cookie = "ERROR: could not find firefox cookies database in C:/Profiles"

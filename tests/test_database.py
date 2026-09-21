@@ -61,6 +61,26 @@ class DatabaseTests(unittest.TestCase):
             self.assertIn("完成", finished["result_json"])
             self.assertIsNone(db.list_sources()[0]["active_job_id"])
 
+    def test_source_jobs_show_running_state_and_queue_position(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "test.sqlite3")
+            first_source, _ = db.add_source(
+                {"platform": "manual", "video_id": "queue-1", "url": "https://example.test/1", "title": "A"}
+            )
+            second_source, _ = db.add_source(
+                {"platform": "manual", "video_id": "queue-2", "url": "https://example.test/2", "title": "B"}
+            )
+            first_job, _ = db.create_job("proxy", first_source)
+            second_job, _ = db.create_job("proxy", second_source)
+            db.start_job(first_job)
+
+            sources = {row["id"]: row for row in db.list_sources()}
+            self.assertEqual(sources[first_source]["active_job_status"], "RUNNING")
+            self.assertEqual(sources[second_source]["active_job_status"], "QUEUED")
+            self.assertEqual(sources[second_source]["queue_position"], 1)
+            self.assertEqual(sources[second_source]["queue_ahead"], 1)
+            self.assertEqual(db.get_job(second_job)["queue_ahead"], 1)
+
     def test_candidate_part_number_follows_source_timeline(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "test.sqlite3")

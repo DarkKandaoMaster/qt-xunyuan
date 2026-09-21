@@ -85,8 +85,14 @@ async function loadSources(startPolling = true) {
     const active = Boolean(source.active_job_id);
     const downloading = source.active_job_kind === 'proxy';
     const analyzing = source.active_job_kind === 'analyze';
+    const queued = active && source.active_job_status === 'QUEUED';
+    const running = active && source.active_job_status === 'RUNNING';
+    const queueHint = queued ? `<small>排队第 ${Number(source.queue_position || 1)} 位，前方 ${Number(source.queue_ahead || 0)} 个任务</small>` : '';
+    const activeLabel = running ? (downloading ? '正在下载' : '正在分析') : queued ? '排队中' : source.status;
+    const proxyLabel = downloading && queued ? `排队第 ${Number(source.queue_position || 1)} 位` : downloading && running ? '下载中…' : source.proxy_path ? '代理已就绪' : source.status === 'ERROR' ? '重试下载' : '下载代理';
+    const analyzeLabel = analyzing && queued ? `排队第 ${Number(source.queue_position || 1)} 位` : analyzing && running ? '分析中…' : '镜头分析';
     const error = source.error ? `<small class="source-error" title="${escapeHtml(source.error)}">${escapeHtml(humanError(source.error))}</small>` : '';
-    return `<tr data-source-id="${source.id}"><td><strong>${escapeHtml(source.title || source.url)}</strong><small>${escapeHtml(source.uploader || source.url)}</small></td><td>${source.target_unit || '—'}<small>${escapeHtml(source.search_query || '')}</small></td><td>${source.duration ? `${Number(source.duration).toFixed(1)}s` : '—'}<small>${source.resolution || ''}</small></td><td>${Number(source.source_score || 0).toFixed(0)}</td><td><span class="badge ${source.status === 'ERROR' ? 'fail' : active ? 'warn' : ''}">${source.status}</span>${error}</td><td><div class="toolbox"><button class="secondary" onclick="proxy(${source.id},this)" ${source.proxy_path || active ? 'disabled' : ''}>${downloading ? '下载中…' : source.proxy_path ? '代理已就绪' : source.status === 'ERROR' ? '重试下载' : '下载代理'}</button><button onclick="analyze(${source.id},this)" ${!source.proxy_path || active ? 'disabled' : ''}>${analyzing ? '分析中…' : '镜头分析'}</button></div></td></tr>`;
+    return `<tr data-source-id="${source.id}"><td><strong>${escapeHtml(source.title || source.url)}</strong><small>${escapeHtml(source.uploader || source.url)}</small></td><td>${source.target_unit || '—'}<small>${escapeHtml(source.search_query || '')}</small></td><td>${source.duration ? `${Number(source.duration).toFixed(1)}s` : '—'}<small>${source.resolution || ''}</small></td><td>${Number(source.source_score || 0).toFixed(0)}</td><td><span class="badge ${source.status === 'ERROR' ? 'fail' : active ? 'warn' : ''}">${activeLabel}</span>${queueHint}${error}</td><td><div class="toolbox"><button class="secondary" onclick="proxy(${source.id},this)" ${source.proxy_path || active ? 'disabled' : ''}>${proxyLabel}</button><button onclick="analyze(${source.id},this)" ${!source.proxy_path || active ? 'disabled' : ''}>${analyzeLabel}</button></div></td></tr>`;
   }).join('') : '<tr><td colspan="6" class="empty">尚无来源。可自动搜索或导入一个公开 URL。</td></tr>';
   $('#analyzed-sources').innerHTML = analyzedData.items.length ? analyzedData.items.map(source => {
     const error = source.error ? `<small class="source-error" title="${escapeHtml(source.error)}">${escapeHtml(humanError(source.error))}</small>` : '';
@@ -160,7 +166,7 @@ async function restoreProcessed(id, button) { button.disabled = true; try { awai
 
 async function submitForm(form, url) {
   const data = Object.fromEntries(new FormData(form)); if (data.limit) data.limit = Number(data.limit); notice('处理中…'); [...form.elements].forEach(element => element.disabled = true);
-  try { const result = await api(url, {method: 'POST', body: JSON.stringify(data)}); const excluded = Number(result.excluded || 0); notice(result.created === false ? '该来源已存在，未重复导入。' : `完成：新增 ${result.created ?? 1}，发现 ${result.found ?? 1}${excluded ? `，已过滤 ${excluded} 条超过 ${Number(result.max_duration_seconds || 600) / 60} 分钟的视频` : ''}。`); form.reset(); await Promise.all([loadSources(), loadDashboard()]); }
+  try { const result = await api(url, {method: 'POST', body: JSON.stringify(data)}); const excluded = Number(result.excluded || 0); const excludedLive = Number(result.excluded_live || 0); const excludedLong = Math.max(0, excluded - excludedLive); const filtered = [excludedLive ? `${excludedLive} 条直播/无限循环来源` : '', excludedLong ? `${excludedLong} 条超时长来源` : ''].filter(Boolean).join('、'); notice(result.created === false ? '该来源已存在，未重复导入。' : `完成：新增 ${result.created ?? 1}，发现 ${result.found ?? 1}${filtered ? `，已过滤 ${filtered}` : ''}。`); form.reset(); await Promise.all([loadSources(), loadDashboard()]); }
   catch (error) { notice(error.message, true); }
   finally { [...form.elements].forEach(element => element.disabled = false); }
 }

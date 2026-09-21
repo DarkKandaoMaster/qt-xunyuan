@@ -30,6 +30,8 @@ class App:
         source = self.db.get_source(source_id)
         if not source:
             raise KeyError("来源不存在")
+        if kind == "proxy":
+            self.pipeline.validate_proxy_source(source_id)
         if kind == "analyze" and not source.get("proxy_path"):
             raise ValueError("请先完成代理下载，再运行镜头分析")
         job_id, created = self.db.create_job(kind, source_id)

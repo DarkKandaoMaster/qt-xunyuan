@@ -55,6 +55,7 @@ class Settings:
     ytdlp_cookies_from_browser: str
     ytdlp_sleep_interval: int
     ytdlp_max_sleep_interval: int
+    ytdlp_stall_timeout_seconds: int
     ai_api_key: str
     ai_api_url: str
     ai_model: str
@@ -111,6 +112,7 @@ def load_settings() -> Settings:
         ytdlp_cookies_from_browser=os.environ.get("YTDLP_COOKIES_FROM_BROWSER", "").strip(),
         ytdlp_sleep_interval=max(0, _as_int("YTDLP_SLEEP_INTERVAL", 5)),
         ytdlp_max_sleep_interval=max(0, _as_int("YTDLP_MAX_SLEEP_INTERVAL", 10)),
+        ytdlp_stall_timeout_seconds=max(30, _as_int("YTDLP_STALL_TIMEOUT_SECONDS", 120)),
         ai_api_key=os.environ.get("AI_API_KEY", ""),
         ai_api_url=os.environ.get("AI_API_URL", ""),
         ai_model=os.environ.get("AI_MODEL", ""),

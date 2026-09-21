@@ -4,9 +4,12 @@ import hashlib
 import csv
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
+import tempfile
+import time
 import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +25,10 @@ class ToolMissing(RuntimeError):
     pass
 
 
+class DownloadStalled(TimeoutError):
+    pass
+
+
 def _command_exists(command: str) -> bool:
     path = Path(command)
     return path.exists() if path.parent != Path(".") else shutil.which(command) is not None
@@ -29,6 +36,58 @@ def _command_exists(command: str) -> bool:
 
 def _run(args: list[str], timeout: int = 3600) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=timeout, check=False)
+
+
+def _terminate_process_tree(proc: subprocess.Popen[Any]) -> None:
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                       capture_output=True, text=True, check=False)
+    else:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+def _run_download(args: list[str], progress_dir: Path, progress_pattern: str,
+                  stall_timeout: int, timeout: int) -> subprocess.CompletedProcess[str]:
+    """Run yt-dlp while aborting a download whose output files stop changing."""
+    def marker() -> tuple[int, int]:
+        files = [path for path in progress_dir.glob(progress_pattern) if path.is_file()]
+        return (sum(path.stat().st_size for path in files),
+                max((path.stat().st_mtime_ns for path in files), default=0))
+
+    with tempfile.TemporaryFile() as log:
+        proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT)
+        started = last_progress = time.monotonic()
+        previous = marker()
+        try:
+            while proc.poll() is None:
+                time.sleep(1)
+                current = marker()
+                now_mono = time.monotonic()
+                if current != previous:
+                    previous = current
+                    last_progress = now_mono
+                if now_mono - started >= timeout:
+                    _terminate_process_tree(proc)
+                    raise subprocess.TimeoutExpired(args, timeout)
+                if now_mono - last_progress >= stall_timeout:
+                    _terminate_process_tree(proc)
+                    raise DownloadStalled(f"连续 {stall_timeout} 秒没有下载进度")
+        finally:
+            if proc.poll() is None:
+                _terminate_process_tree(proc)
+        log.seek(0)
+        output = log.read().decode("utf-8", errors="replace")
+        return subprocess.CompletedProcess(args, int(proc.returncode or 0), stdout="", stderr=output)
 
 
 def ytdlp_error_message(stderr: str, action: str) -> str:
@@ -62,6 +121,24 @@ def source_duration_allowed(duration: Any, maximum_seconds: int) -> bool:
     except (TypeError, ValueError):
         return True
     return value <= float(maximum_seconds)
+
+
+def source_live_reason(metadata: dict[str, Any]) -> str | None:
+    """Return a short reason when metadata identifies a live or endless source."""
+    live_status = str(metadata.get("live_status") or "").lower()
+    if metadata.get("is_live") is True or live_status == "is_live":
+        return "正在直播"
+    if live_status == "is_upcoming" or metadata.get("is_upcoming") is True:
+        return "尚未结束的首播/直播"
+    duration = metadata.get("duration")
+    if duration not in (None, ""):
+        return None
+    if metadata.get("concurrent_view_count") not in (None, 0, ""):
+        return "无固定时长的直播"
+    title = str(metadata.get("title") or "")
+    if re.search(r"(?i)(?:\b24\s*/\s*7\b|\blive\s*stream\b|\blivestream\b|\blive\s+24\b|\bendless\s+loop\b)", title):
+        return "疑似直播或无限循环视频"
+    return None
 
 
 def merge_facts(base_json: str, probe: dict[str, Any], **overrides: Any) -> dict[str, Any]:
@@ -176,7 +253,7 @@ class MediaPipeline:
         payload = json.loads(proc.stdout)
         self.db.add_traffic("metadata", len(proc.stdout.encode("utf-8")))
         entries = payload.get("entries") or []
-        found = created = excluded = 0
+        found = created = excluded = excluded_live = 0
         for entry in entries:
             if not entry:
                 continue
@@ -185,12 +262,16 @@ class MediaPipeline:
             if not url:
                 continue
             metadata = self._normalize_ytdlp(entry, query, target_unit)
+            if source_live_reason(metadata.get("metadata") or metadata):
+                excluded += 1
+                excluded_live += 1
+                continue
             if not source_duration_allowed(metadata.get("duration"), self.settings.source_max_duration_seconds):
                 excluded += 1
                 continue
             _, is_new = self.db.add_source(metadata)
             created += int(is_new)
-        return {"found": found, "created": created, "excluded": excluded,
+        return {"found": found, "created": created, "excluded": excluded, "excluded_live": excluded_live,
                 "max_duration_seconds": self.settings.source_max_duration_seconds}
 
     def import_url(self, url: str, target_unit: str | None = None) -> tuple[int, bool]:
@@ -198,7 +279,10 @@ class MediaPipeline:
             proc = _run(self._ytdlp("--dump-single-json", "--skip-download", "--no-warnings", url), timeout=180)
             if proc.returncode == 0:
                 self.db.add_traffic("metadata", len(proc.stdout.encode("utf-8")))
-                return self.db.add_source(self._normalize_ytdlp(json.loads(proc.stdout), "manual", target_unit))
+                item = json.loads(proc.stdout)
+                if reason := source_live_reason(item):
+                    raise ValueError(f"不支持导入{reason}；请选择有固定时长的公开视频")
+                return self.db.add_source(self._normalize_ytdlp(item, "manual", target_unit))
         platform = "youtube" if "youtu" in url else "vimeo" if "vimeo" in url else "manual"
         video_id = hashlib.sha256(url.encode()).hexdigest()[:20]
         return self.db.add_source({"platform": platform, "video_id": video_id, "url": url, "title": url,
@@ -231,13 +315,25 @@ class MediaPipeline:
         result["source_score"] = source_score(item, target_unit, query)
         return result
 
-    def download_proxy(self, source_id: int) -> Path:
+    def validate_proxy_source(self, source_id: int) -> dict[str, Any]:
         source = self._required_source(source_id)
+        try:
+            metadata = json.loads(source.get("metadata_json") or "{}")
+        except json.JSONDecodeError:
+            metadata = {}
+        metadata.setdefault("title", source.get("title"))
+        metadata.setdefault("duration", source.get("duration"))
+        if reason := source_live_reason(metadata):
+            raise ValueError(f"不支持下载{reason}；请选择有固定时长的公开视频")
         if not source_duration_allowed(source.get("duration"), self.settings.source_max_duration_seconds):
             minutes = self.settings.source_max_duration_seconds / 60
             raise ValueError(f"来源时长超过 {minutes:g} 分钟上限，为控制下载和分析成本，请换用更短的视频")
         if not _command_exists(self.settings.ytdlp_bin):
             raise ToolMissing("未找到 yt-dlp")
+        return source
+
+    def download_proxy(self, source_id: int) -> Path:
+        source = self.validate_proxy_source(source_id)
         output = self.settings.data_dir / "proxy" / f"{source['platform']}_{source['video_id']}.%(ext)s"
         self.db.update_source(source_id, status="PROXY_QUEUED", error=None)
         before = self._matching_bytes(output.parent, f"{source['platform']}_{source['video_id']}.*")
@@ -245,8 +341,18 @@ class MediaPipeline:
                f"best[height<={self.settings.proxy_max_height}][vcodec^=avc1][acodec!=none]/"
                f"bestvideo[height<={self.settings.proxy_max_height}][vcodec!=none]+bestaudio/"
                f"best[height<={self.settings.proxy_max_height}][vcodec!=none]")
-        proc = _run(self._ytdlp("-f", fmt, "--merge-output-format", "mp4", "--no-playlist",
-                                "-o", str(output), source["url"], use_cookies=True), timeout=3600)
+        try:
+            proc = _run_download(self._ytdlp("-f", fmt, "--merge-output-format", "mp4", "--no-playlist",
+                                             "-o", str(output), source["url"], use_cookies=True),
+                                 output.parent, f"{source['platform']}_{source['video_id']}.*",
+                                 self.settings.ytdlp_stall_timeout_seconds, timeout=3600)
+        except DownloadStalled as exc:
+            message = f"代理下载已自动停止：{exc}。请检查网络，或换一个有固定时长的公开视频。"
+            for partial in output.parent.glob(f"{source['platform']}_{source['video_id']}*.part"):
+                if partial.is_file():
+                    partial.unlink(missing_ok=True)
+            self.db.update_source(source_id, status="ERROR", error=message)
+            raise RuntimeError(message) from exc
         if proc.returncode != 0:
             message = ytdlp_error_message(proc.stderr, "代理下载")
             self.db.update_source(source_id, status="ERROR", error=message)

@@ -347,7 +347,7 @@ class Database:
                      bucket: str | None = None, max_duration: int | None = None) -> list[dict[str, Any]]:
         where, args = self._source_filters(view, bucket, max_duration)
         with self.connect() as con:
-            return [dict(r) for r in con.execute("""SELECT s.*,
+            items = [dict(r) for r in con.execute("""SELECT s.*,
                 (SELECT COUNT(*) FROM candidate_shots c WHERE c.source_id=s.id) candidate_count,
                 (SELECT j.id FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze')
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_id,
@@ -355,6 +355,10 @@ class Database:
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_kind
                 FROM sources s """ + where + " ORDER BY s.source_score DESC,s.id DESC LIMIT ? OFFSET ?",
                 args + [limit, offset])]
+            for item in items:
+                if item.get("active_job_id"):
+                    item.update(self._job_queue_fields(con, int(item["active_job_id"])))
+            return items
 
     def get_source(self, source_id: int) -> dict[str, Any] | None:
         with self.connect() as con:
@@ -388,7 +392,23 @@ class Database:
 
     def get_job(self, job_id: int) -> dict[str, Any] | None:
         with self.connect() as con:
-            return self._dict(con.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone())
+            job = self._dict(con.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone())
+            if job:
+                job.update(self._job_queue_fields(con, job_id))
+            return job
+
+    @staticmethod
+    def _job_queue_fields(con: sqlite3.Connection, job_id: int) -> dict[str, Any]:
+        row = con.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        status = row["status"] if row else None
+        if status != "QUEUED":
+            return {"active_job_status": status, "queue_position": None, "queue_ahead": 0}
+        queued_before = int(con.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status='QUEUED' AND id<?", (job_id,)
+        ).fetchone()[0])
+        running = int(con.execute("SELECT COUNT(*) FROM jobs WHERE status='RUNNING'").fetchone()[0])
+        return {"active_job_status": status, "queue_position": queued_before + 1,
+                "queue_ahead": running + queued_before}
 
     def start_job(self, job_id: int) -> None:
         with self.connect() as con:
