@@ -53,6 +53,17 @@ def ytdlp_error_message(stderr: str, action: str) -> str:
     return detail[-800:]
 
 
+def source_duration_allowed(duration: Any, maximum_seconds: int) -> bool:
+    """Keep unknown durations, but reject known sources beyond the resource cap."""
+    if duration in (None, ""):
+        return True
+    try:
+        value = float(duration)
+    except (TypeError, ValueError):
+        return True
+    return value <= float(maximum_seconds)
+
+
 def merge_facts(base_json: str, probe: dict[str, Any], **overrides: Any) -> dict[str, Any]:
     facts = dict(json.loads(base_json or "{}"))
     facts.update(probe)
@@ -165,7 +176,7 @@ class MediaPipeline:
         payload = json.loads(proc.stdout)
         self.db.add_traffic("metadata", len(proc.stdout.encode("utf-8")))
         entries = payload.get("entries") or []
-        found = created = 0
+        found = created = excluded = 0
         for entry in entries:
             if not entry:
                 continue
@@ -174,9 +185,13 @@ class MediaPipeline:
             if not url:
                 continue
             metadata = self._normalize_ytdlp(entry, query, target_unit)
+            if not source_duration_allowed(metadata.get("duration"), self.settings.source_max_duration_seconds):
+                excluded += 1
+                continue
             _, is_new = self.db.add_source(metadata)
             created += int(is_new)
-        return {"found": found, "created": created}
+        return {"found": found, "created": created, "excluded": excluded,
+                "max_duration_seconds": self.settings.source_max_duration_seconds}
 
     def import_url(self, url: str, target_unit: str | None = None) -> tuple[int, bool]:
         if _command_exists(self.settings.ytdlp_bin):
@@ -218,6 +233,9 @@ class MediaPipeline:
 
     def download_proxy(self, source_id: int) -> Path:
         source = self._required_source(source_id)
+        if not source_duration_allowed(source.get("duration"), self.settings.source_max_duration_seconds):
+            minutes = self.settings.source_max_duration_seconds / 60
+            raise ValueError(f"来源时长超过 {minutes:g} 分钟上限，为控制下载和分析成本，请换用更短的视频")
         if not _command_exists(self.settings.ytdlp_bin):
             raise ToolMissing("未找到 yt-dlp")
         output = self.settings.data_dir / "proxy" / f"{source['platform']}_{source['video_id']}.%(ext)s"

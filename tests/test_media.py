@@ -7,11 +7,17 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from qt_tool.db import Database
-from qt_tool.media import MediaPipeline, delivery_description, merge_facts, ytdlp_error_message
+from qt_tool.media import (MediaPipeline, delivery_description, merge_facts,
+                           source_duration_allowed, ytdlp_error_message)
 from qt_tool.subject import select_motion_valley, split_presence_samples
 
 
 class MediaTests(unittest.TestCase):
+    def test_source_duration_cap_keeps_unknown_and_limits_known_duration(self):
+        self.assertTrue(source_duration_allowed(None, 600))
+        self.assertTrue(source_duration_allowed(600, 600))
+        self.assertFalse(source_duration_allowed(600.1, 600))
+
     def test_ytdlp_errors_are_operator_friendly(self):
         cookie = "ERROR: could not find firefox cookies database in C:/Profiles"
         network = "HTTPSConnection: Failed to establish a new connection: [WinError 10013]"

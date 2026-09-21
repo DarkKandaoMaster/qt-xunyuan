@@ -103,10 +103,14 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/sources":
                 q = parse_qs(parsed.query)
                 view = q.get("view", ["all"])[0]
-                total = self.app.db.count_sources(view)
+                bucket = q.get("bucket", [None])[0]
+                maximum = self.app.settings.source_max_duration_seconds
+                total = self.app.db.count_sources(view, bucket, maximum)
                 page, page_size, offset = self._pagination(q, total)
-                return self._json({"ok": True, "items": self.app.db.list_sources(page_size, view, offset),
-                                   "total": total, "page": page, "page_size": page_size})
+                return self._json({"ok": True,
+                                   "items": self.app.db.list_sources(page_size, view, offset, bucket, maximum),
+                                   "total": total, "page": page, "page_size": page_size,
+                                   "bucket": bucket, "max_duration_seconds": maximum})
             if match := re.fullmatch(r"/api/jobs/(\d+)", path):
                 job = self.app.db.get_job(int(match.group(1)))
                 if not job:
@@ -119,10 +123,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/candidates":
                 q = parse_qs(parsed.query)
                 status = q.get("status", [None])[0]
-                total = self.app.db.count_candidates(status)
+                bucket = q.get("bucket", [None])[0]
+                total = self.app.db.count_candidates(status, bucket)
                 page, page_size, offset = self._pagination(q, total, 100)
-                return self._json({"ok": True, "items": self.app.db.list_candidates(status, page_size, offset),
-                                   "total": total, "page": page, "page_size": page_size})
+                return self._json({"ok": True,
+                                   "items": self.app.db.list_candidates(status, page_size, offset, bucket),
+                                   "total": total, "page": page, "page_size": page_size, "bucket": bucket})
             if path == "/api/final-candidates":
                 q = parse_qs(parsed.query)
                 state = q.get("state", ["pending"])[0]

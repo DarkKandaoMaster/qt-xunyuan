@@ -4,6 +4,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const fmtBytes = n => n > 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} GB` : `${(n / 1024 ** 2).toFixed(1)} MB`;
 const PAGE_SIZE = 20;
 const listPages = {sources: 1, analyzed: 1, accepted: 1, processed: 1, rejected: 1};
+const listFilters = {sources: '', analyzed: ''};
 
 async function api(url, options = {}) {
   const response = await fetch(url, {headers: {'Content-Type': 'application/json'}, ...options});
@@ -53,6 +54,9 @@ async function loadRules() {
     `<option value="${id}">${id} ${unit.name}${unit.requires_confirmation ? ' ⚠' : ''}</option>`)].join('');
   $('#discover-unit').innerHTML = options;
   $('#import-unit').innerHTML = options;
+  const bucketOptions = ['<option value="">全部分类</option>', ...Object.entries(data.buckets).map(([id, bucket]) => `<option value="${id}">${id} ${bucket.name}</option>`), '<option value="unassigned">未分类</option>'].join('');
+  $('#sources-bucket-filter').innerHTML = bucketOptions;
+  $('#analyzed-bucket-filter').innerHTML = bucketOptions;
 }
 
 async function loadDashboard() {
@@ -70,9 +74,11 @@ async function loadDashboard() {
 }
 
 async function loadSources(startPolling = true) {
+  const sourceBucket = encodeURIComponent(listFilters.sources);
+  const analyzedBucket = encodeURIComponent(listFilters.analyzed);
   const [candidateData, analyzedData] = await Promise.all([
-    api(`/api/sources?view=candidate&page=${listPages.sources}&page_size=${PAGE_SIZE}`),
-    api(`/api/sources?view=analyzed&page=${listPages.analyzed}&page_size=${PAGE_SIZE}`)
+    api(`/api/sources?view=candidate&bucket=${sourceBucket}&page=${listPages.sources}&page_size=${PAGE_SIZE}`),
+    api(`/api/sources?view=analyzed&bucket=${analyzedBucket}&page=${listPages.analyzed}&page_size=${PAGE_SIZE}`)
   ]);
   const items = candidateData.items;
   $('#sources').innerHTML = items.length ? items.map(source => {
@@ -154,13 +160,15 @@ async function restoreProcessed(id, button) { button.disabled = true; try { awai
 
 async function submitForm(form, url) {
   const data = Object.fromEntries(new FormData(form)); if (data.limit) data.limit = Number(data.limit); notice('处理中…'); [...form.elements].forEach(element => element.disabled = true);
-  try { const result = await api(url, {method: 'POST', body: JSON.stringify(data)}); notice(result.created === false ? '该来源已存在，未重复导入。' : `完成：新增 ${result.created ?? 1}，发现 ${result.found ?? 1}。`); form.reset(); await Promise.all([loadSources(), loadDashboard()]); }
+  try { const result = await api(url, {method: 'POST', body: JSON.stringify(data)}); const excluded = Number(result.excluded || 0); notice(result.created === false ? '该来源已存在，未重复导入。' : `完成：新增 ${result.created ?? 1}，发现 ${result.found ?? 1}${excluded ? `，已过滤 ${excluded} 条超过 ${Number(result.max_duration_seconds || 600) / 60} 分钟的视频` : ''}。`); form.reset(); await Promise.all([loadSources(), loadDashboard()]); }
   catch (error) { notice(error.message, true); }
   finally { [...form.elements].forEach(element => element.disabled = false); }
 }
 
 $('#discover-form').addEventListener('submit', event => { event.preventDefault(); submitForm(event.currentTarget, '/api/sources/discover'); });
 $('#import-form').addEventListener('submit', event => { event.preventDefault(); submitForm(event.currentTarget, '/api/sources/import'); });
+$('#sources-bucket-filter').onchange = event => { listFilters.sources = event.target.value; listPages.sources = 1; loadSources(); };
+$('#analyzed-bucket-filter').onchange = event => { listFilters.analyzed = event.target.value; listPages.analyzed = 1; loadSources(); };
 $('#export').onclick = async () => { try { const data = await api('/api/export', {method: 'POST', body: '{}'}); notice(`已导出 ${data.rows} 条：${data.path}`); await Promise.all([loadQueues(), loadDashboard()]); } catch (error) { notice(error.message, true); } };
 $('#refresh').onclick = () => Promise.all([loadSources(), loadDashboard(), loadQueues()]);
 Promise.all([loadRules(), loadSources(), loadDashboard(), loadQueues()]).catch(error => notice(error.message, true));

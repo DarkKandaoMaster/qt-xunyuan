@@ -121,6 +121,36 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(len(db.list_sources(20, "candidate", 0)), 20)
             self.assertEqual(len(db.list_sources(20, "candidate", 20)), 5)
 
+    def test_source_list_filters_bucket_and_overlong_candidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "test.sqlite3")
+            short_t1, _ = db.add_source({"platform": "youtube", "video_id": "short-t1",
+                                         "url": "https://example.test/1", "title": "T1",
+                                         "target_unit": "T1.1", "duration": 120})
+            db.add_source({"platform": "youtube", "video_id": "long-t1",
+                           "url": "https://example.test/2", "title": "Long",
+                           "target_unit": "T1.2", "duration": 601})
+            t2, _ = db.add_source({"platform": "youtube", "video_id": "short-t2",
+                                   "url": "https://example.test/3", "title": "T2",
+                                   "target_unit": "T2.1", "duration": 90})
+            self.assertEqual(db.count_sources("candidate", max_duration=600), 2)
+            self.assertEqual([row["id"] for row in db.list_sources(view="candidate", bucket="T1",
+                                                                     max_duration=600)], [short_t1])
+            self.assertEqual([row["id"] for row in db.list_sources(view="candidate", bucket="T2",
+                                                                     max_duration=600)], [t2])
+
+    def test_waiting_candidates_filter_by_bucket(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "test.sqlite3")
+            source_id, _ = db.add_source({"platform": "youtube", "video_id": "bucketed",
+                                          "url": "https://example.test/v", "title": "A"})
+            t1, _ = db.add_candidate({"source_id": source_id, "start_time": 0, "end_time": 10,
+                                      "duration": 10, "candidate_bucket": "T1", "candidate_unit": "T1.1"})
+            db.add_candidate({"source_id": source_id, "start_time": 10, "end_time": 20,
+                              "duration": 10, "candidate_bucket": "T2", "candidate_unit": "T2.1"})
+            self.assertEqual(db.count_candidates("WAITING_REVIEW", "T1"), 1)
+            self.assertEqual([row["id"] for row in db.list_candidates("WAITING_REVIEW", bucket="T1")], [t1])
+
     def test_exported_candidate_moves_to_processed_and_can_be_restored(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "test.sqlite3")

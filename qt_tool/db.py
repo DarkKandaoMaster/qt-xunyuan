@@ -310,19 +310,42 @@ class Database:
             return int(cur.lastrowid), True
 
     @staticmethod
-    def _source_where(view: str) -> str:
-        where = {"candidate": "WHERE s.analysis_completed=0", "analyzed": "WHERE s.analysis_completed=1", "all": ""}.get(view)
-        if where is None:
+    def _bucket_condition(column: str, bucket: str | None) -> tuple[str | None, list[Any]]:
+        if not bucket:
+            return None, []
+        if bucket == "unassigned":
+            return f"({column} IS NULL OR {column}='')", []
+        if not re.fullmatch(r"T[1-9]", bucket):
+            raise ValueError("分类必须是 T1–T9 或 unassigned")
+        return f"({column}=? OR {column} LIKE ?)", [bucket, f"{bucket}.%"]
+
+    @classmethod
+    def _source_filters(cls, view: str, bucket: str | None = None,
+                        max_duration: int | None = None) -> tuple[str, list[Any]]:
+        view_condition = {"candidate": "s.analysis_completed=0", "analyzed": "s.analysis_completed=1",
+                          "all": None}.get(view)
+        if view not in {"candidate", "analyzed", "all"}:
             raise ValueError("来源列表类型必须是 candidate、analyzed 或 all")
-        return where
+        conditions = [view_condition] if view_condition else []
+        args: list[Any] = []
+        bucket_condition, bucket_args = cls._bucket_condition("s.target_unit", bucket)
+        if bucket_condition:
+            conditions.append(bucket_condition)
+            args.extend(bucket_args)
+        if view == "candidate" and max_duration:
+            conditions.append("(s.duration IS NULL OR s.duration<=?)")
+            args.append(max_duration)
+        return ("WHERE " + " AND ".join(conditions)) if conditions else "", args
 
-    def count_sources(self, view: str = "all") -> int:
-        where = self._source_where(view)
+    def count_sources(self, view: str = "all", bucket: str | None = None,
+                      max_duration: int | None = None) -> int:
+        where, args = self._source_filters(view, bucket, max_duration)
         with self.connect() as con:
-            return int(con.execute("SELECT COUNT(*) FROM sources s " + where).fetchone()[0])
+            return int(con.execute("SELECT COUNT(*) FROM sources s " + where, args).fetchone()[0])
 
-    def list_sources(self, limit: int = 20, view: str = "all", offset: int = 0) -> list[dict[str, Any]]:
-        where = self._source_where(view)
+    def list_sources(self, limit: int = 20, view: str = "all", offset: int = 0,
+                     bucket: str | None = None, max_duration: int | None = None) -> list[dict[str, Any]]:
+        where, args = self._source_filters(view, bucket, max_duration)
         with self.connect() as con:
             return [dict(r) for r in con.execute("""SELECT s.*,
                 (SELECT COUNT(*) FROM candidate_shots c WHERE c.source_id=s.id) candidate_count,
@@ -330,7 +353,8 @@ class Database:
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_id,
                 (SELECT j.kind FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze')
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_kind
-                FROM sources s """ + where + " ORDER BY s.source_score DESC,s.id DESC LIMIT ? OFFSET ?", (limit, offset))]
+                FROM sources s """ + where + " ORDER BY s.source_score DESC,s.id DESC LIMIT ? OFFSET ?",
+                args + [limit, offset])]
 
     def get_source(self, source_id: int) -> dict[str, Any] | None:
         with self.connect() as con:
@@ -463,13 +487,34 @@ class Database:
                               (candidate_id,)).fetchone()
             return self._dict(row)
 
-    def count_candidates(self, status: str | None = None) -> int:
-        where, args = ("WHERE status=?", [status]) if status else ("", [])
+    def count_candidates(self, status: str | None = None, bucket: str | None = None) -> int:
+        conditions, args = (["c.status=?"], [status]) if status else ([], [])
+        bucket_condition, bucket_args = self._bucket_condition("c.candidate_unit", bucket)
+        if bucket_condition:
+            if bucket == "unassigned":
+                bucket_condition = "((c.candidate_bucket IS NULL OR c.candidate_bucket='') AND " + bucket_condition + ")"
+            else:
+                bucket_condition = "(c.candidate_bucket=? OR " + bucket_condition + ")"
+                bucket_args = [bucket] + bucket_args
+            conditions.append(bucket_condition)
+            args.extend(bucket_args)
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
         with self.connect() as con:
-            return int(con.execute(f"SELECT COUNT(*) FROM candidate_shots {where}", args).fetchone()[0])
+            return int(con.execute(f"SELECT COUNT(*) FROM candidate_shots c {where}", args).fetchone()[0])
 
-    def list_candidates(self, status: str | None = None, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
-        where, args = ("WHERE c.status=?", [status]) if status else ("", [])
+    def list_candidates(self, status: str | None = None, limit: int = 100, offset: int = 0,
+                        bucket: str | None = None) -> list[dict[str, Any]]:
+        conditions, args = (["c.status=?"], [status]) if status else ([], [])
+        bucket_condition, bucket_args = self._bucket_condition("c.candidate_unit", bucket)
+        if bucket_condition:
+            if bucket == "unassigned":
+                bucket_condition = "((c.candidate_bucket IS NULL OR c.candidate_bucket='') AND " + bucket_condition + ")"
+            else:
+                bucket_condition = "(c.candidate_bucket=? OR " + bucket_condition + ")"
+                bucket_args = [bucket] + bucket_args
+            conditions.append(bucket_condition)
+            args.extend(bucket_args)
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
         with self.connect() as con:
             rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url FROM candidate_shots c
                                     JOIN sources s ON s.id=c.source_id {where}

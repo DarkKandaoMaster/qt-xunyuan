@@ -18,12 +18,12 @@
       </div>
     </section>
     <section class="card" style="margin-top:14px">
-      <div class="section-head"><div><h2>候选来源</h2><p>代理用于镜头检测与审核，永远不能进入交付目录。</p></div><button class="secondary" id="refresh">刷新</button></div>
+      <div class="section-head"><div><h2>候选来源</h2><p>仅显示不超过 10 分钟的来源；代理永远不能进入交付目录。</p></div><div class="list-controls"><select id="sources-bucket-filter" aria-label="候选来源分类"></select><button class="secondary" id="refresh">刷新</button></div></div>
       <div style="overflow:auto"><table class="source-table"><thead><tr><th>来源</th><th>目标</th><th>时长 / 分辨率</th><th>分数</th><th>状态</th><th>操作</th></tr></thead><tbody id="sources"></tbody></table></div>
       <div class="pagination" id="sources-pagination"></div>
     </section>
     <section class="card" style="margin-top:14px">
-      <div class="section-head"><div><h2>已分析来源</h2><p>镜头分析成功的来源会自动移入这里；如有误操作可移回候选来源。</p></div></div>
+      <div class="section-head"><div><h2>已分析来源</h2><p>镜头分析成功的来源会自动移入这里；如有误操作可移回候选来源。</p></div><div class="list-controls"><select id="analyzed-bucket-filter" aria-label="已分析来源分类"></select></div></div>
       <div style="overflow:auto"><table class="source-table"><thead><tr><th>来源</th><th>目标</th><th>时长 / 分辨率</th><th>候选片段</th><th>状态</th><th>操作</th></tr></thead><tbody id="analyzed-sources"></tbody></table></div>
       <div class="pagination" id="analyzed-pagination"></div>
     </section>

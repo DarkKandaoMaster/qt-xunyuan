@@ -43,6 +43,7 @@ class Settings:
     search_templates_path: Path
     db_path: Path
     proxy_max_height: int
+    source_max_duration_seconds: int
     max_download_concurrency: int
     daily_traffic_warning_gb: float
     cache_limit_gb: float
@@ -98,6 +99,7 @@ def load_settings() -> Settings:
         search_templates_path=ROOT / "rules" / "search_templates.yaml",
         db_path=data_dir / "qt_tool.sqlite3",
         proxy_max_height=_as_int("PROXY_MAX_HEIGHT", 480),
+        source_max_duration_seconds=max(60, _as_int("SOURCE_MAX_DURATION_SECONDS", 600)),
         max_download_concurrency=_as_int("MAX_DOWNLOAD_CONCURRENCY", 2),
         daily_traffic_warning_gb=_as_float("DAILY_TRAFFIC_WARNING_GB", 20.0),
         cache_limit_gb=_as_float("CACHE_LIMIT_GB", 50.0),
