@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import time
 import unicodedata
+import urllib.request
 import uuid
 from threading import Lock, BoundedSemaphore
 from datetime import UTC, datetime
@@ -184,6 +185,16 @@ def delivery_description(title: str, limit: int = 60) -> str:
     return (value[:limit].rstrip(" ._") or "视频片段")
 
 
+def po_token_server_alive(url: str) -> bool:
+    if not url:
+        return False
+    try:
+        with urllib.request.urlopen(url.rstrip("/") + "/ping", timeout=2) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+
 def tool_status(settings: Settings) -> dict[str, bool]:
     subject = SubjectContinuityAnalyzer(settings.root / "tools" / "models")
     return {
@@ -191,7 +202,8 @@ def tool_status(settings: Settings) -> dict[str, bool]:
         "ffprobe": _command_exists(settings.ffprobe_bin),
         "yt_dlp": _command_exists(settings.ytdlp_bin),
         "youtube_js": bool(settings.ytdlp_js_runtime),
-        "youtube_auth": bool(settings.ytdlp_cookies_from_browser),
+        "youtube_auth": bool(settings.ytdlp_cookies_file) or bool(settings.ytdlp_cookies_from_browser),
+        "po_token": po_token_server_alive(settings.ytdlp_po_token_url),
         "subject_ai": subject.available,
     }
 
@@ -265,12 +277,25 @@ class MediaPipeline:
             command.extend(("--js-runtimes", self.settings.ytdlp_js_runtime))
         if _command_exists(self.settings.ffmpeg_bin):
             command.extend(("--ffmpeg-location", str(Path(self.settings.ffmpeg_bin).parent)))
-        if use_cookies and self.settings.ytdlp_cookies_from_browser:
-            command.extend(("--cookies-from-browser", self.settings.ytdlp_cookies_from_browser,
-                            "--sleep-requests", "1",
-                            "--sleep-interval", str(self.settings.ytdlp_sleep_interval),
-                            "--max-sleep-interval", str(max(self.settings.ytdlp_sleep_interval,
-                                                            self.settings.ytdlp_max_sleep_interval))))
+        if self.settings.ytdlp_proxy:
+            command.extend(("--proxy", self.settings.ytdlp_proxy))
+        if self.settings.ytdlp_po_token_url:
+            command.extend(("--extractor-args",
+                            f"youtubepot-bgutilhttp:base_url={self.settings.ytdlp_po_token_url}"))
+        if use_cookies:
+            cookies_file = self.settings.ytdlp_cookies_file
+            authenticated = True
+            if cookies_file and Path(cookies_file).is_file():
+                command.extend(("--cookies", cookies_file))
+            elif self.settings.ytdlp_cookies_from_browser:
+                command.extend(("--cookies-from-browser", self.settings.ytdlp_cookies_from_browser))
+            else:
+                authenticated = False
+            if authenticated:
+                command.extend(("--sleep-requests", "1",
+                                "--sleep-interval", str(self.settings.ytdlp_sleep_interval),
+                                "--max-sleep-interval", str(max(self.settings.ytdlp_sleep_interval,
+                                                                self.settings.ytdlp_max_sleep_interval))))
         command.extend(args)
         return command
 

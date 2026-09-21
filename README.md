@@ -55,6 +55,9 @@ FFPROBE_BIN=C:\path\to\ffprobe.exe
 YTDLP_BIN=C:\path\to\yt-dlp.exe
 YTDLP_JS_RUNTIME=node:C:\path\to\node.exe
 YTDLP_COOKIES_FROM_BROWSER=firefox
+YTDLP_COOKIES_FILE=C:\path\to\www.youtube.com_cookies.txt
+YTDLP_PO_TOKEN_URL=http://127.0.0.1:4416
+YTDLP_PROXY=http://127.0.0.1:7890
 SOURCE_MAX_DURATION_SECONDS=600
 YTDLP_SLEEP_INTERVAL=5
 YTDLP_MAX_SLEEP_INTERVAL=10
@@ -64,6 +67,15 @@ YouTube 的公开素材解析需要 JavaScript 运行时。程序会自动探测
 `YTDLP_JS_RUNTIME` 手工指定。不要在配置文件中填写 YouTube 账号、密码或验证码。
 如果公开取流触发登录验证，可通过 `YTDLP_COOKIES_FROM_BROWSER` 使用本机已关闭浏览器的
 登录会话；该配置只保存浏览器名称，不保存 Cookie 内容。建议使用专用 Firefox 资料和备用账号。
+
+浏览器会话不可用时，可改用 Cookie 文件：用 `yt-dlp` 支持的 Netscape 格式从浏览器导出，
+通过 `YTDLP_COOKIES_FILE` 指定路径，留空时程序自动探测项目根目录下的
+`www.youtube.com_cookies.txt`。Cookie 文件等同于登录凭据，切勿提交到 Git，
+仓库 `.gitignore` 已忽略 `*cookies*.txt`；两者同时配置时优先使用 Cookie 文件。
+
+YouTube 的 bot 检测还可能要求 PO Token。安装 yt-dlp 插件 bgutil-ytdlp-pot-provider
+并在本机启动其 HTTP 服务后，把服务地址填入 `YTDLP_PO_TOKEN_URL`（留空则不启用），
+首页工具状态栏的 `po_token` 会显示该服务是否可用。需要经代理访问时可配置 `YTDLP_PROXY`。
 
 ## 生产流程
 

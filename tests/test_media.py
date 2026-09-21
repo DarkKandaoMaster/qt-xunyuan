@@ -38,6 +38,54 @@ class MediaTests(unittest.TestCase):
             self.assertEqual(db.get_candidate(cid)['status'], 'REJECTED')
             pipeline.clip_final.assert_not_called()
 
+    def _ytdlp_pipeline(self, data_dir: Path, **overrides) -> MediaPipeline:
+        settings = SimpleNamespace(data_dir=data_dir, ytdlp_bin="yt-dlp", ytdlp_js_runtime="",
+                                   ffmpeg_bin="missing-ffmpeg", ytdlp_cookies_file="",
+                                   ytdlp_cookies_from_browser="", ytdlp_po_token_url="",
+                                   ytdlp_proxy="", ytdlp_sleep_interval=5, ytdlp_max_sleep_interval=10)
+        for key, value in overrides.items():
+            setattr(settings, key, value)
+        return MediaPipeline(settings, None, None)
+
+    def test_cookies_file_is_preferred_over_browser_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            cookies = data_dir / "www.youtube.com_cookies.txt"
+            cookies.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+            pipeline = self._ytdlp_pipeline(data_dir, ytdlp_cookies_file=str(cookies),
+                                            ytdlp_cookies_from_browser="firefox")
+            command = pipeline._ytdlp("--skip-download", use_cookies=True)
+            self.assertIn("--cookies", command)
+            self.assertEqual(command[command.index("--cookies") + 1], str(cookies))
+            self.assertNotIn("--cookies-from-browser", command)
+
+    def test_browser_profile_used_when_cookies_file_is_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            pipeline = self._ytdlp_pipeline(data_dir, ytdlp_cookies_file=str(data_dir / "absent.txt"),
+                                            ytdlp_cookies_from_browser="firefox")
+            command = pipeline._ytdlp("--skip-download", use_cookies=True)
+            self.assertNotIn("--cookies", command)
+            self.assertIn("--cookies-from-browser", command)
+            self.assertEqual(command[command.index("--cookies-from-browser") + 1], "firefox")
+
+    def test_po_token_provider_is_only_passed_when_configured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            configured = self._ytdlp_pipeline(data_dir, ytdlp_po_token_url="http://127.0.0.1:4416")
+            command = configured._ytdlp("--skip-download")
+            self.assertIn("--extractor-args", command)
+            self.assertEqual(command[command.index("--extractor-args") + 1],
+                             "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416")
+            self.assertNotIn("--extractor-args", self._ytdlp_pipeline(data_dir)._ytdlp("--skip-download"))
+
+    def test_proxy_is_only_passed_when_configured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            command = self._ytdlp_pipeline(data_dir, ytdlp_proxy="http://127.0.0.1:7890")._ytdlp("--skip-download")
+            self.assertEqual(command[command.index("--proxy") + 1], "http://127.0.0.1:7890")
+            self.assertNotIn("--proxy", self._ytdlp_pipeline(data_dir)._ytdlp("--skip-download"))
+
     def test_source_duration_cap_keeps_unknown_and_limits_known_duration(self):
         self.assertTrue(source_duration_allowed(None, 600))
         self.assertTrue(source_duration_allowed(600, 600))
