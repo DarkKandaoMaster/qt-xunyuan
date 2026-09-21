@@ -16,6 +16,28 @@ from qt_tool.subject import select_motion_valley, split_presence_samples
 
 
 class MediaTests(unittest.TestCase):
+    def test_low_resolution_rejected_before_clip(self):
+        from unittest.mock import Mock
+        from qt_tool.rules import RuleEngine
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / 'test.sqlite3')
+            sid, _ = db.add_source({'platform': 'test', 'video_id': 'low', 'url': 'https://example.test/low'})
+            db.update_source(sid, original_path=str(Path(tmp) / 'original.mp4'))
+            cid, _ = db.add_candidate({'source_id': sid, 'start_time': 0, 'end_time': 6, 'duration': 6,
+                                      'candidate_bucket': 'T8', 'candidate_unit': 'T8.3'})
+            db.review(cid, {'decision': 'ACCEPT', 'final_viewpoint': 'third_person'})
+            rules = Mock()
+            rules._r9 = lambda facts, bucket: RuleEngine._r9(None, facts, bucket)
+            pipeline = MediaPipeline(SimpleNamespace(data_dir=Path(tmp)), db, rules)
+            pipeline.probe = Mock(return_value={'width': 1920, 'height': 1080})
+            pipeline.download_final = Mock(return_value=Path(tmp) / 'original.mp4')
+            pipeline.clip_final = Mock(side_effect=AssertionError('must not encode'))
+            result = pipeline.final_qa_and_deliver(cid)
+            self.assertEqual(result['qa_status'], 'FAIL')
+            self.assertIn('1920x1080', result['message'])
+            self.assertEqual(db.get_candidate(cid)['status'], 'REJECTED')
+            pipeline.clip_final.assert_not_called()
+
     def test_source_duration_cap_keeps_unknown_and_limits_known_duration(self):
         self.assertTrue(source_duration_allowed(None, 600))
         self.assertTrue(source_duration_allowed(600, 600))

@@ -4,6 +4,7 @@ import json
 import mimetypes
 import re
 import traceback
+from threading import Event, Lock
 from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,7 +14,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .config import Settings, load_settings
 from .db import Database
-from .media import MediaPipeline, tool_status
+from .media import MediaPipeline, tool_status, DownloadCancelled
 from .rules import RuleEngine
 
 
@@ -24,37 +25,103 @@ class App:
         self.db.fail_interrupted_jobs()
         self.rules = RuleEngine(settings.rules_path, settings.conflicts_path)
         self.pipeline = MediaPipeline(settings, self.db, self.rules)
-        self.executor = ThreadPoolExecutor(max_workers=max(1, settings.max_download_concurrency), thread_name_prefix="qt-job")
+        self.cancel_events: dict[int, Event] = {}
+        self.job_lock = Lock()
+        self.executors = {
+            "proxy": ThreadPoolExecutor(max_workers=max(1, settings.max_download_concurrency), thread_name_prefix="qt-download"),
+            "preflight": ThreadPoolExecutor(max_workers=max(1, settings.max_preflight_concurrency), thread_name_prefix="qt-preflight"),
+            "analyze": ThreadPoolExecutor(max_workers=max(1, settings.max_analysis_concurrency), thread_name_prefix="qt-analysis"),
+        }
 
-    def queue_source_job(self, kind: str, source_id: int) -> tuple[int, bool]:
+    def queue_source_job(self, kind: str, source_id: int, allow_unknown: bool = False) -> tuple[int, bool]:
         source = self.db.get_source(source_id)
         if not source:
             raise KeyError("来源不存在")
-        if kind == "proxy":
+        if kind in {"proxy", "preflight"}:
             self.pipeline.validate_proxy_source(source_id)
         if kind == "analyze" and not source.get("proxy_path"):
             raise ValueError("请先完成代理下载，再运行镜头分析")
-        job_id, created = self.db.create_job(kind, source_id)
+        job_id, created = self.db.create_job(kind, source_id, {"allow_unknown": allow_unknown})
         if created:
-            next_status = "PROXY_QUEUED" if kind == "proxy" else "ANALYZING"
+            with self.job_lock:
+                self.cancel_events[job_id] = Event()
+            next_status = "ANALYZING" if kind == "analyze" else "PROXY_QUEUED" if kind == "proxy" else "PREFLIGHT_QUEUED"
             self.db.update_source(source_id, status=next_status, error=None)
-            self.executor.submit(self._run_source_job, job_id, kind, source_id)
+            self.executors[kind].submit(self._run_source_job, job_id, kind, source_id)
         return job_id, created
 
     def _run_source_job(self, job_id: int, kind: str, source_id: int) -> None:
-        self.db.start_job(job_id)
+        with self.job_lock:
+            if self.db.get_job(job_id)["status"] == "CANCELLED":
+                self.cancel_events.pop(job_id, None)
+                return
+            self.db.start_job(job_id)
+            event = self.cancel_events[job_id]
+        state: dict[str, Any] = {}
+        def progress(update):
+            state.update(update)
+            self.db.job_progress(job_id, state)
         try:
+            if event.is_set():
+                raise DownloadCancelled("任务已取消")
             if kind == "proxy":
-                path = self.pipeline.download_proxy(source_id)
+                payload = json.loads(self.db.get_job(job_id).get("payload_json") or "{}")
+                path = self.pipeline.download_proxy(source_id, cancel=event, progress=progress, allow_unknown=bool(payload.get("allow_unknown")))
                 result = {"path": str(path), "message": "代理下载完成"}
+            elif kind == "preflight":
+                result = self.pipeline.preflight_source(source_id, cancel=event, progress=progress)
+                result["message"] = "规格预检：" + result["reason"]
+                self.db.update_source(source_id, status="METADATA_READY", error=None)
             else:
                 candidate_ids = self.pipeline.analyze_source(source_id)
-                result = {"candidate_ids": candidate_ids, "message": f"镜头分析完成，生成 {len(candidate_ids)} 个候选"}
+                result = self.analysis_summary(candidate_ids)
             self.db.finish_job(job_id, "DONE", result=result)
+        except DownloadCancelled as exc:
+            source = self.db.get_source(source_id) or {}
+            self.db.update_source(source_id, status="PROXY_READY" if source.get("proxy_path") else "METADATA_READY", error=None)
+            self.db.finish_job(job_id, "CANCELLED", result={"message": str(exc)})
         except Exception as exc:
             message = str(exc)
             self.db.update_source(source_id, status="ERROR", error=message[-4000:])
             self.db.finish_job(job_id, "FAILED", error=message[-4000:])
+        finally:
+            with self.job_lock:
+                self.cancel_events.pop(job_id, None)
+
+    def cancel_job(self, job_id: int) -> None:
+        job = self.db.get_job(job_id)
+        if not job or job["kind"] not in {"proxy", "preflight"}:
+            raise ValueError("仅支持取消代理下载和规格预检")
+        with self.job_lock:
+            event = self.cancel_events.get(job_id)
+            if event:
+                event.set()
+                if self.db.get_job(job_id)["status"] == "QUEUED":
+                    self.db.finish_job(job_id, "CANCELLED", result={"message": "已取消排队"})
+                    source = self.db.get_source(job["entity_id"]) or {}
+                    self.db.update_source(job["entity_id"], status="PROXY_READY" if source.get("proxy_path") else "METADATA_READY", error=None)
+
+    def analysis_summary(self, candidate_ids: list[int]) -> dict[str, Any]:
+        waiting = rejected = 0
+        reasons: dict[str, int] = {}
+        for candidate_id in candidate_ids:
+            candidate = self.db.get_candidate(candidate_id) or {}
+            waiting += candidate.get("status") == "WAITING_REVIEW"
+            if candidate.get("status") == "REJECTED":
+                rejected += 1
+                for rule in self.db.get_rule_results(candidate_id):
+                    if rule["status"] == "FAIL" and rule["deterministic"]:
+                        reason = f"{rule['rule_id']}：{rule['reason']}"
+                        reasons[reason] = reasons.get(reason, 0) + 1
+        message = f"镜头分析完成：生成 {len(candidate_ids)} 个，待人工审核 {waiting} 个，自动拒绝 {rejected} 个。"
+        if waiting:
+            message += "待审核片段请到人工审核查看（尚未通过交付审核）。"
+        if rejected:
+            message += "拒绝片段请到拒绝列表查看。原因：" + "；".join(f"{reason}（{count} 个）" for reason, count in reasons.items())
+        if not candidate_ids:
+            message += "本次未新增候选，可能没有满足最短时长的片段，或片段已存在。"
+        return {"candidate_ids": candidate_ids, "waiting_count": waiting, "rejected_count": rejected,
+                "rejection_reasons": reasons, "message": message}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -163,6 +230,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             path = urlparse(self.path).path
             data = self._read_json()
+            if match := re.fullmatch(r"/api/jobs/(\d+)/cancel", path):
+                self.app.cancel_job(int(match.group(1)))
+                return self._json({"ok": True})
+            if match := re.fullmatch(r"/api/sources/(\d+)/preflight", path):
+                job_id, created = self.app.queue_source_job("preflight", int(match.group(1)))
+                return self._json({"ok": True, "job_id": job_id, "created": created}, 202)
             if path == "/api/sources/import":
                 source_id, created = self.app.pipeline.import_url(str(data["url"]).strip(), data.get("target_unit"))
                 return self._json({"ok": True, "source_id": source_id, "created": created})
@@ -170,11 +243,16 @@ class Handler(BaseHTTPRequestHandler):
                 result = self.app.pipeline.discover(str(data["query"]).strip(), data.get("target_unit"), int(data.get("limit", 10)))
                 return self._json({"ok": True, **result})
             if match := re.fullmatch(r"/api/sources/(\d+)/proxy", path):
-                job_id, created = self.app.queue_source_job("proxy", int(match.group(1)))
+                job_id, created = self.app.queue_source_job("proxy", int(match.group(1)), data.get("allow_unknown") is True)
                 return self._json({"ok": True, "job_id": job_id, "created": created, "status": "QUEUED"}, 202)
             if match := re.fullmatch(r"/api/sources/(\d+)/analyze", path):
                 job_id, created = self.app.queue_source_job("analyze", int(match.group(1)))
                 return self._json({"ok": True, "job_id": job_id, "created": created, "status": "QUEUED"}, 202)
+            if match := re.fullmatch(r"/api/sources/(\d+)/deleted", path):
+                if not isinstance(data.get("deleted"), bool):
+                    raise ValueError("deleted 必须是布尔值")
+                self.app.db.set_source_deleted(int(match.group(1)), data["deleted"])
+                return self._json({"ok": True})
             if match := re.fullmatch(r"/api/sources/(\d+)/analysis-state", path):
                 source_id = int(match.group(1))
                 if not self.app.db.get_source(source_id):
@@ -298,5 +376,6 @@ def run() -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        app.executor.shutdown(wait=False, cancel_futures=True)
+        for executor in app.executors.values():
+            executor.shutdown(wait=False, cancel_futures=True)
         server.server_close()

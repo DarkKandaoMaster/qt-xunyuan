@@ -8,6 +8,37 @@ from qt_tool.db import Database
 
 
 class DatabaseTests(unittest.TestCase):
+    def test_source_soft_delete_restore_and_job_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / 'test.sqlite3')
+            source = {'platform': 'test', 'video_id': 'delete', 'url': 'https://example.test/delete'}
+            sid, _ = db.add_source(source)
+            db.set_source_deleted(sid, True)
+            self.assertEqual(db.count_sources('candidate'), 0)
+            self.assertEqual(db.count_sources('deleted'), 1)
+            self.assertEqual(db.list_sources(view='deleted')[0]['id'], sid)
+            self.assertEqual(db.add_source(source), (sid, False))
+            with self.assertRaisesRegex(ValueError, '已删除'):
+                db.create_job('proxy', sid)
+            db.set_source_deleted(sid, False)
+            self.assertEqual(db.count_sources('candidate'), 1)
+            db.create_job('proxy', sid)
+            with self.assertRaisesRegex(ValueError, '任务'):
+                db.set_source_deleted(sid, True)
+            self.assertIsNone(db.get_source(sid)['deleted_at'])
+
+    def test_accept_requires_explicit_viewpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / 'test.sqlite3')
+            sid, _ = db.add_source({'platform': 'test', 'video_id': 'view', 'url': 'https://example.test/view'})
+            cid, _ = db.add_candidate({'source_id': sid, 'start_time': 0, 'end_time': 6, 'duration': 6})
+            for value in (None, '', 'unknown'):
+                with self.assertRaisesRegex(ValueError, '人称'):
+                    db.review(cid, {'decision': 'ACCEPT', 'final_viewpoint': value})
+            self.assertNotEqual(db.get_candidate(cid)['status'], 'ACCEPTED')
+            db.review(cid, {'decision': 'ACCEPT', 'final_viewpoint': 'third_person'})
+            self.assertEqual(db.get_candidate(cid)['status'], 'ACCEPTED')
+
     def test_waiting_candidate_can_be_trimmed_and_facts_are_persisted(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "test.sqlite3")

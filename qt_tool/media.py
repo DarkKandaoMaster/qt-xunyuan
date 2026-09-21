@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 import time
 import unicodedata
+import uuid
+from threading import Lock, BoundedSemaphore
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,24 @@ class ToolMissing(RuntimeError):
 
 class DownloadStalled(TimeoutError):
     pass
+
+
+class DownloadCancelled(RuntimeError):
+    pass
+
+
+def format_preflight(formats: list[dict[str, Any]], bucket: str | None) -> dict[str, str]:
+    if not bucket:
+        return {"status": "UNKNOWN", "reason": "未选择目标单元，无法确认最低规格"}
+    width, height = (1920, 1080) if bucket == "T9" else (2560, 1440)
+    videos = [f for f in formats if f.get("vcodec") not in (None, "none")]
+    def fits(f):
+        return (f.get("width") or 0) >= width and (f.get("height") or 0) >= height and (bucket == "T9" or (f.get("fps") or 0) >= 24)
+    if any(fits(f) for f in videos):
+        return {"status": "PASS", "reason": "存在符合分辨率和帧率要求的格式；清晰度、原生画质仍需审核"}
+    if not videos or any(not f.get("width") or not f.get("height") or (bucket != "T9" and not f.get("fps")) for f in videos):
+        return {"status": "UNKNOWN", "reason": "格式信息不完整，暂不能确定规格"}
+    return {"status": "FAIL", "reason": f"当前可用格式均不满足 {width}×{height}" + ("、≥24fps" if bucket != "T9" else "")}
 
 
 def _command_exists(command: str) -> bool:
@@ -54,16 +74,19 @@ def _terminate_process_tree(proc: subprocess.Popen[Any]) -> None:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
         proc.kill()
+        proc.wait(timeout=5)
 
 
 def _run_download(args: list[str], progress_dir: Path, progress_pattern: str,
-                  stall_timeout: int, timeout: int) -> subprocess.CompletedProcess[str]:
+                  stall_timeout: int, timeout: int, cancel=None, progress=None) -> subprocess.CompletedProcess[str]:
     """Run yt-dlp while aborting a download whose output files stop changing."""
     def marker() -> tuple[int, int]:
         files = [path for path in progress_dir.glob(progress_pattern) if path.is_file()]
         return (sum(path.stat().st_size for path in files),
                 max((path.stat().st_mtime_ns for path in files), default=0))
 
+    if cancel and cancel.is_set():
+        raise DownloadCancelled("已取消下载")
     with tempfile.TemporaryFile() as log:
         proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT)
         started = last_progress = time.monotonic()
@@ -73,6 +96,10 @@ def _run_download(args: list[str], progress_dir: Path, progress_pattern: str,
                 time.sleep(1)
                 current = marker()
                 now_mono = time.monotonic()
+                if cancel and cancel.is_set():
+                    raise DownloadCancelled("已取消下载；已下载的部分保留供重试")
+                if progress:
+                    progress({"bytes": current[0], "speed": max(0, current[0] - previous[0])})
                 if current != previous:
                     previous = current
                     last_progress = now_mono
@@ -190,6 +217,11 @@ class MediaPipeline:
         self.settings = settings
         self.db = db
         self.rules = rules
+        self._final_lock_guard = Lock()
+        self._final_source_locks: dict[int, Any] = {}
+        self._final_candidate_locks: dict[int, Any] = {}
+        self._verified_originals: dict[str, tuple[int, int]] = {}
+        self._final_download_slots = BoundedSemaphore(max(1, getattr(settings, "max_download_concurrency", 2)))
         root = getattr(settings, "root", settings.data_dir.parent)
         self.subject_analyzer = SubjectContinuityAnalyzer(Path(root) / "tools" / "models")
         if hasattr(self.db, "delivery_filename_rows"):
@@ -228,7 +260,7 @@ class MediaPipeline:
         return renamed
 
     def _ytdlp(self, *args: str, use_cookies: bool = False) -> list[str]:
-        command = [self.settings.ytdlp_bin]
+        command = [self.settings.ytdlp_bin, "--encoding", "utf-8"]
         if self.settings.ytdlp_js_runtime:
             command.extend(("--js-runtimes", self.settings.ytdlp_js_runtime))
         if _command_exists(self.settings.ffmpeg_bin):
@@ -304,7 +336,7 @@ class MediaPipeline:
             "uploader": item.get("uploader") or item.get("channel") or "",
             "description": item.get("description") or "",
             "duration": item.get("duration"),
-            "thumbnail": item.get("thumbnail") or "",
+            "thumbnail": item.get("thumbnail") or next((t.get("url") for t in reversed(item.get("thumbnails") or []) if t.get("url")), ""),
             "available_formats": formats,
             "resolution": f"{item.get('width') or 0}x{item.get('height') or 0}",
             "target_unit": target_unit,
@@ -332,8 +364,40 @@ class MediaPipeline:
             raise ToolMissing("未找到 yt-dlp")
         return source
 
-    def download_proxy(self, source_id: int) -> Path:
+    def preflight_source(self, source_id: int, cancel=None, progress=None, refresh=True) -> dict[str, str]:
         source = self.validate_proxy_source(source_id)
+        cached = json.loads(source.get("metadata_json") or "{}")
+        checked_at = (cached.get("preflight") or {}).get("checked_at")
+        if not refresh and checked_at and (datetime.now(UTC) - datetime.fromisoformat(checked_at)).total_seconds() < 3600:
+            return format_preflight(cached.get("formats") or [], (source.get("target_unit") or "").split('.')[0] or None)
+        if progress:
+            progress({"stage": "正在查询原片格式（不下载视频）"})
+        proc = _run_download(self._ytdlp("--dump-single-json", "--skip-download", "--no-playlist", "--no-warnings", source["url"], use_cookies=True),
+                             self.settings.data_dir, "__metadata_none__", 180, 180, cancel=cancel)
+        if proc.returncode:
+            raise RuntimeError(ytdlp_error_message(proc.stderr, "规格预检"))
+        item = json.loads(next(line for line in proc.stderr.splitlines() if line.startswith('{')))
+        formats = item.get("formats") or []
+        result = format_preflight(formats, (source.get("target_unit") or "").split('.')[0] or None)
+        if source_live_reason(item) or not source_duration_allowed(item.get("duration"), self.settings.source_max_duration_seconds):
+            result = {"status": "FAIL", "reason": "来源正在直播或超过时长上限"}
+        item["preflight"] = dict(result, checked_at=datetime.now(UTC).isoformat())
+        best = max((f for f in formats if f.get("vcodec") not in (None, "none")), key=lambda f: (f.get("height") or 0, f.get("width") or 0), default={})
+        self.db.update_source(source_id, metadata_json=json.dumps(item, ensure_ascii=False),
+                              available_formats=json.dumps(formats, ensure_ascii=False),
+                              thumbnail=item.get("thumbnail") or source.get("thumbnail") or "",
+                              duration=item.get("duration") or source.get("duration"),
+                              resolution=f"{best.get('width') or 0}x{best.get('height') or 0}")
+        return result
+
+    def download_proxy(self, source_id: int, cancel=None, progress=None, allow_unknown=False) -> Path:
+        source = self.validate_proxy_source(source_id)
+        result = self.preflight_source(source_id, cancel=cancel, progress=progress, refresh=False)
+        source = self.validate_proxy_source(source_id)
+        if result["status"] == "FAIL" or (result["status"] == "UNKNOWN" and not allow_unknown):
+            raise ValueError(result["reason"] + "；代理尚未下载，请确认目标单元或重试规格检查")
+        if progress:
+            progress({"stage": "下载代理中", "bytes": 0, "speed": 0})
         output = self.settings.data_dir / "proxy" / f"{source['platform']}_{source['video_id']}.%(ext)s"
         self.db.update_source(source_id, status="PROXY_QUEUED", error=None)
         before = self._matching_bytes(output.parent, f"{source['platform']}_{source['video_id']}.*")
@@ -345,7 +409,7 @@ class MediaPipeline:
             proc = _run_download(self._ytdlp("-f", fmt, "--merge-output-format", "mp4", "--no-playlist",
                                              "-o", str(output), source["url"], use_cookies=True),
                                  output.parent, f"{source['platform']}_{source['video_id']}.*",
-                                 self.settings.ytdlp_stall_timeout_seconds, timeout=3600)
+                                 self.settings.ytdlp_stall_timeout_seconds, timeout=3600, cancel=cancel, progress=progress)
         except DownloadStalled as exc:
             message = f"代理下载已自动停止：{exc}。请检查网络，或换一个有固定时长的公开视频。"
             for partial in output.parent.glob(f"{source['platform']}_{source['video_id']}*.part"):
@@ -358,6 +422,8 @@ class MediaPipeline:
             self.db.update_source(source_id, status="ERROR", error=message)
             raise RuntimeError(message)
         path = self._find_download(output.parent, f"{source['platform']}_{source['video_id']}.*")
+        if progress:
+            progress({"stage": "正在验证代理文件", "speed": 0})
         info = self.probe(path)
         if not info.get("playable"):
             self.db.update_source(source_id, status="ERROR", error="代理文件不包含视频画面，请重新下载")
@@ -368,23 +434,114 @@ class MediaPipeline:
         return path
 
     def download_final(self, source_id: int) -> Path:
+        # All candidates from one source share this lock and re-read the cache
+        # AFTER acquiring it. A stale candidate snapshot must not start a second download.
+        with self._final_lock_guard:
+            lock = self._final_source_locks.setdefault(source_id, Lock())
+        with lock:
+            return self._download_final_locked(source_id)
+
+    def _validate_original(self, path: Path, source: dict[str, Any]) -> None:
+        root = (self.settings.data_dir / "original").resolve()
+        path = path.resolve()
+        if root not in path.parents:
+            raise ValueError("最终源必须位于 original 目录，不能使用代理或外部文件")
+        stat = path.stat()
+        signature = (stat.st_size, stat.st_mtime_ns)
+        if self._verified_originals.get(str(path)) == signature:
+            return
+        info = self.probe(path)
+        if not info.get("playable") or info.get("probe_error") or not info.get("has_audio"):
+            raise ValueError("高清源损坏、无法正常探测，或缺少音轨")
+        expected = float(source.get("duration") or 0)
+        tolerance = max(2.0, expected * 0.01)
+        durations = [float(info.get(k) or 0) for k in ("duration", "video_duration", "audio_duration")]
+        known = [d for d in durations if d > 0]
+        if not known or (expected and any(abs(d - expected) > tolerance for d in known)):
+            raise ValueError(f"高清源时长不完整：预期 {expected:.1f}s，文件／视频／音频 {durations}")
+        if max(known) - min(known) > tolerance:
+            raise ValueError("高清源音视频轨时长不一致")
+        # Duration metadata alone is insufficient: decode every video/audio frame
+        # before publishing the original for all candidate clips to reuse.
+        prefix = [self.settings.ffmpeg_bin, "-hide_banner", "-v", "error", "-xerror"]
+        suffix = ["-i", str(path), "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"]
+        proc = None
+        if info.get("video_codec") == "av1":
+            # Avoid the very slow libaom software decoder where NVIDIA AV1
+            # decoding is available. Keep frames on-device for null output.
+            proc = _run(prefix + ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda",
+                                  "-c:v", "av1_cuvid"] + suffix, timeout=7200)
+        if proc is None or proc.returncode or proc.stderr.strip():
+            proc = _run(prefix + suffix, timeout=7200)
+        if proc.returncode or proc.stderr.strip():
+            raise ValueError("高清源完整解码校验失败：" + proc.stderr[-1000:])
+        self._verified_originals[str(path)] = signature
+
+    def _quarantine_originals(self, paths: list[Path]) -> Path:
+        root = (self.settings.data_dir / "original").resolve()
+        destination = root / "quarantine" / (datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "_" + uuid.uuid4().hex[:8])
+        for path in paths:
+            path = path.resolve()
+            if path.is_file():
+                if root not in path.resolve().parents:
+                    raise ValueError("拒绝移动 original 目录以外的文件")
+                destination.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(path), str(destination / path.name))
+        return destination
+
+    def _download_final_locked(self, source_id: int) -> Path:
         source = self._required_source(source_id)
         if not _command_exists(self.settings.ytdlp_bin):
             raise ToolMissing("未找到 yt-dlp")
-        output = self.settings.data_dir / "original" / f"{source['platform']}_{source['video_id']}.%(ext)s"
-        self.db.update_source(source_id, status="FINAL_DOWNLOADING", error=None)
-        before = self._matching_bytes(output.parent, f"{source['platform']}_{source['video_id']}.*")
-        proc = _run(self._ytdlp("-f", "bestvideo+bestaudio/best", "--merge-output-format", "mp4",
-                                "--no-playlist", "-o", str(output), source["url"],
-                                use_cookies=True), timeout=7200)
-        if proc.returncode != 0:
-            message = ytdlp_error_message(proc.stderr, "最终源下载")
+        root = self.settings.data_dir / "original"
+        root.mkdir(parents=True, exist_ok=True)
+        # Inspect existing final files, including legacy files not yet recorded in DB.
+        stem = f"{source['platform']}_{source['video_id']}"
+        legacy = [] if re.search(r'[\\/\[\]*?]', stem) else list(root.glob(stem + ".*"))
+        recorded = Path(source["original_path"]) if source.get("original_path") else None
+        possible = [recorded] if recorded else [p for p in legacy if p.suffix.lower() in {".mp4", ".mkv", ".webm"} and not re.search(r"\.f\d+\.", p.name)]
+        for path in possible:
+            if path and path.is_file():
+                try:
+                    self._validate_original(path, source)
+                    self.db.update_source(source_id, original_path=str(path), error=None)
+                    return path
+                except (ValueError, FileNotFoundError):
+                    self._quarantine_originals([path])
+        self.db.update_source(source_id, original_path=None)
+        if legacy:
+            self._quarantine_originals(legacy)
+        # An attempt never writes into another attempt's files. Failed attempts
+        # remain available for diagnosis, but are never trusted as finished media.
+        attempt = root / f"source_{source_id}" / uuid.uuid4().hex
+        attempt.mkdir(parents=True)
+        output = attempt / "source.%(ext)s"
+        log_path = attempt / "download.log"
+        try:
+            self.db.update_source(source_id, status="FINAL_QUEUED", error=None)
+            with self._final_download_slots:
+                self.db.update_source(source_id, status="FINAL_DOWNLOADING", error=None)
+                proc = _run_download(self._ytdlp("-f", "bestvideo+bestaudio/best", "--merge-output-format", "mp4",
+                                    "--no-playlist", "--no-progress", "--socket-timeout", "30", "--retries", "3",
+                                    "-o", str(output), source["url"], use_cookies=True),
+                                     attempt, "source.*", 180, 7200)
+                # Keep diagnostics locally; redact signed download URLs.
+                log_path.write_text(re.sub(r"https?://\S+", "[URL]", proc.stderr), encoding="utf-8")
+                if proc.returncode:
+                    raise RuntimeError(ytdlp_error_message(proc.stderr, "最终源下载"))
+                path = self._find_download(attempt, "source.*")
+                self.db.update_source(source_id, status="FINAL_VERIFYING")
+                self._validate_original(path, source)
+            self.db.add_traffic("final", path.stat().st_size, source_id)
+            self.db.update_source(source_id, status="FINAL_READY", original_path=str(path), error=None)
+            return path
+        except Exception as exc:
+            detail = re.sub(r"https?://\S+", "[URL]", str(exc))
+            with log_path.open("a", encoding="utf-8") as log:
+                log.write("\n" + detail + "\n")
+            message = f"{detail}；诊断日志：{log_path}"
             self.db.update_source(source_id, status="ERROR", error=message)
-            raise RuntimeError(message)
-        path = self._find_download(output.parent, f"{source['platform']}_{source['video_id']}.*")
-        self.db.add_traffic("final", max(0, path.stat().st_size - before), source_id)
-        self.db.update_source(source_id, status="FINAL_READY", original_path=str(path), error=None)
-        return path
+            raise RuntimeError(message) from exc
 
     @staticmethod
     def _matching_bytes(parent: Path, pattern: str) -> int:
@@ -393,7 +550,7 @@ class MediaPipeline:
     @staticmethod
     def _find_download(parent: Path, pattern: str) -> Path:
         matches = sorted((p for p in parent.glob(pattern)
-                          if p.is_file() and not re.search(r"\.f\d+\.", p.name) and not p.name.endswith(".part")),
+                          if p.is_file() and p.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"} and not re.search(r"\.f\d+\.", p.name)),
                          key=lambda p: p.stat().st_mtime, reverse=True)
         if not matches:
             raise FileNotFoundError("下载完成但未找到已合并的视频文件")
@@ -418,6 +575,9 @@ class MediaPipeline:
         return {"playable": bool(video), "duration": float(duration or 0), "width": int(video.get("width") or 0),
                 "height": int(video.get("height") or 0), "fps": fps, "video_codec": video.get("codec_name"),
                 "has_audio": audio is not None, "audio_codec": audio.get("codec_name") if audio else None,
+                "video_duration": float(video.get("duration") or 0),
+                "audio_duration": float(audio.get("duration") or 0) if audio else 0,
+                "probe_error": proc.stderr.strip(),
                 "format_name": payload.get("format", {}).get("format_name", ""), "file_size": path.stat().st_size}
 
     def detect_shots(self, path: Path, threshold: float = 0.28, safety_margin: float = 0.12) -> list[tuple[float, float]]:
@@ -562,9 +722,7 @@ class MediaPipeline:
             raise KeyError("候选不存在")
         if candidate["status"] != "ACCEPTED":
             raise ValueError("只有人工接受的候选才能制作最终片段")
-        source_path = candidate.get("original_path")
-        if not source_path:
-            source_path = str(self.download_final(int(candidate["source_id"])))
+        source_path = str(self.download_final(int(candidate["source_id"])))
         original = Path(source_path).resolve()
         proxy_root = (self.settings.data_dir / "proxy").resolve()
         original_root = (self.settings.data_dir / "original").resolve()
@@ -585,11 +743,35 @@ class MediaPipeline:
         return output
 
     def final_qa_and_deliver(self, candidate_id: int) -> dict[str, Any]:
+        with self._final_lock_guard:
+            lock = self._final_candidate_locks.setdefault(candidate_id, Lock())
+        if not lock.acquire(blocking=False):
+            raise ValueError("该片段正在最终处理，请勿重复提交")
+        try:
+            return self._final_qa_and_deliver_locked(candidate_id)
+        finally:
+            lock.release()
+
+    def _final_qa_and_deliver_locked(self, candidate_id: int) -> dict[str, Any]:
         candidate = self.db.get_candidate(candidate_id)
         if not candidate:
             raise KeyError("候选不存在")
         if not candidate.get("candidate_bucket") or not candidate.get("candidate_unit") or candidate.get("candidate_viewpoint") not in {"first_person", "third_person"}:
             raise ValueError("最终处理前必须由人工确认桶、单元和人称")
+        original = self.download_final(int(candidate["source_id"]))
+        candidate = self.db.get_candidate(candidate_id) or candidate
+        source_info = self.probe(original)
+        resolution = self.rules._r9(dict(source_info, source_type="FINAL"), candidate["candidate_bucket"])
+        if resolution.status == RuleStatus.FAIL:
+            result = resolution.to_dict()
+            self.db.save_rule_results(candidate_id, [result], stage="final")
+            self.db.create_final_clip(candidate_id, original_path=str(original),
+                                      width=source_info.get("width"), height=source_info.get("height"),
+                                      qa_status="FAIL", deliverable_status="BLOCKED",
+                                      qa={"rules": [result], "probe": source_info})
+            self.db.review(candidate_id, {"decision": "REJECT", "notes": resolution.reason})
+            return {"qa_status": "FAIL", "final_path": None, "probe": source_info,
+                    "rules": [result], "message": resolution.reason + "；已筛除，可在拒绝列表查看"}
         clip = self._clip_path(candidate)
         if not clip.exists():
             clip = self.clip_final(candidate_id)
@@ -682,6 +864,10 @@ class MediaPipeline:
     def _clip_path(self, candidate: dict[str, Any]) -> Path:
         source_stem = (Path(candidate["original_path"]).stem if candidate.get("original_path")
                        else f"{candidate.get('platform') or 'source'}_{candidate.get('video_id') or candidate['source_id']}")
+        # Isolated download attempts use a generic basename; clip storage is
+        # shared across sources, so include the stable source ID there.
+        if source_stem == "source":
+            source_stem = f"source_{candidate['source_id']}"
         safe_stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", source_stem).strip(" .") or "source"
         part_number = self.db.candidate_part_number(int(candidate["id"]))
         return self.settings.data_dir / "clips" / f"{safe_stem}-{part_number}.mp4"

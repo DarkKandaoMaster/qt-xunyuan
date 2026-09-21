@@ -61,6 +61,8 @@ class Settings:
     ai_model: str
     host: str
     port: int
+    max_preflight_concurrency: int = 3
+    max_analysis_concurrency: int = 1
 
 
 def _detect_ytdlp_js_runtime(root: Path) -> str:
@@ -102,6 +104,8 @@ def load_settings() -> Settings:
         proxy_max_height=_as_int("PROXY_MAX_HEIGHT", 480),
         source_max_duration_seconds=max(60, _as_int("SOURCE_MAX_DURATION_SECONDS", 600)),
         max_download_concurrency=_as_int("MAX_DOWNLOAD_CONCURRENCY", 2),
+        max_preflight_concurrency=_as_int("MAX_PREFLIGHT_CONCURRENCY", 3),
+        max_analysis_concurrency=_as_int("MAX_ANALYSIS_CONCURRENCY", 1),
         daily_traffic_warning_gb=_as_float("DAILY_TRAFFIC_WARNING_GB", 20.0),
         cache_limit_gb=_as_float("CACHE_LIMIT_GB", 50.0),
         single_file_warning_gb=_as_float("SINGLE_FILE_WARNING_GB", 4.0),

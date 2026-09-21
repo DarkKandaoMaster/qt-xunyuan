@@ -65,8 +65,9 @@ class RuleEngineTests(unittest.TestCase):
                          RuleStatus.CONFLICT)
 
     def test_unit_scope_conflict(self):
-        self.assertEqual(self.engine.unit_gate("T5.7").status, RuleStatus.CONFLICT)
-        self.assertEqual(self.engine.unit_gate("T9.5").status, RuleStatus.CONFLICT)
+        for unit in ("T5.6", "T5.7", "T7.6", "T7.7", "T7.8", "T9.5"):
+            self.assertEqual(self.engine.unit_gate(unit).status, RuleStatus.PASS)
+            self.assertFalse(self.engine.units[unit]["requires_confirmation"])
         self.assertEqual(self.engine.unit_gate("T3.6").status, RuleStatus.CONFLICT)
         self.assertEqual(self.engine.unit_gate("T1.1").status, RuleStatus.PASS)
 

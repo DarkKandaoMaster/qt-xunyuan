@@ -181,6 +181,8 @@ class Database:
             if "result_json" not in columns:
                 con.execute("ALTER TABLE jobs ADD COLUMN result_json TEXT NOT NULL DEFAULT '{}'")
             source_columns = {row[1] for row in con.execute("PRAGMA table_info(sources)")}
+            if "deleted_at" not in source_columns:
+                con.execute("ALTER TABLE sources ADD COLUMN deleted_at TEXT")
             if "analysis_completed" not in source_columns:
                 con.execute("ALTER TABLE sources ADD COLUMN analysis_completed INTEGER NOT NULL DEFAULT 0")
                 con.execute("""UPDATE sources SET analysis_completed=1
@@ -323,10 +325,11 @@ class Database:
     def _source_filters(cls, view: str, bucket: str | None = None,
                         max_duration: int | None = None) -> tuple[str, list[Any]]:
         view_condition = {"candidate": "s.analysis_completed=0", "analyzed": "s.analysis_completed=1",
-                          "all": None}.get(view)
-        if view not in {"candidate", "analyzed", "all"}:
-            raise ValueError("来源列表类型必须是 candidate、analyzed 或 all")
+                          "all": None, "deleted": None}.get(view)
+        if view not in {"candidate", "analyzed", "all", "deleted"}:
+            raise ValueError("来源列表类型必须是 candidate、analyzed、deleted 或 all")
         conditions = [view_condition] if view_condition else []
+        conditions.append("s.deleted_at IS NOT NULL" if view == "deleted" else "s.deleted_at IS NULL")
         args: list[Any] = []
         bucket_condition, bucket_args = cls._bucket_condition("s.target_unit", bucket)
         if bucket_condition:
@@ -349,9 +352,9 @@ class Database:
         with self.connect() as con:
             items = [dict(r) for r in con.execute("""SELECT s.*,
                 (SELECT COUNT(*) FROM candidate_shots c WHERE c.source_id=s.id) candidate_count,
-                (SELECT j.id FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze')
+                (SELECT j.id FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze','preflight')
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_id,
-                (SELECT j.kind FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze')
+                (SELECT j.kind FROM jobs j WHERE j.entity_id=s.id AND j.kind IN ('proxy','analyze','preflight')
                  AND j.status IN ('QUEUED','RUNNING') ORDER BY j.id DESC LIMIT 1) active_job_kind
                 FROM sources s """ + where + " ORDER BY s.source_score DESC,s.id DESC LIMIT ? OFFSET ?",
                 args + [limit, offset])]
@@ -365,23 +368,40 @@ class Database:
             return self._dict(con.execute("SELECT * FROM sources WHERE id=?", (source_id,)).fetchone())
 
     def update_source(self, source_id: int, **fields: Any) -> None:
-        allowed = {"status", "proxy_path", "original_path", "analysis_completed", "error", "duration", "resolution", "metadata_json", "source_score"}
+        allowed = {"status", "proxy_path", "original_path", "analysis_completed", "error", "duration", "resolution", "metadata_json", "source_score", "thumbnail", "available_formats"}
         pairs = [(k, v) for k, v in fields.items() if k in allowed]
         if not pairs:
             return
         with self.connect() as con:
             con.execute(f"UPDATE sources SET {','.join(k+'=?' for k,_ in pairs)} WHERE id=?", [v for _, v in pairs] + [source_id])
 
+    def set_source_deleted(self, source_id: int, deleted: bool) -> None:
+        with self.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            source = con.execute("SELECT * FROM sources WHERE id=?", (source_id,)).fetchone()
+            if not source:
+                raise KeyError("来源不存在")
+            if deleted:
+                if source["analysis_completed"]:
+                    raise ValueError("请先将已分析来源移回候选来源，再删除")
+                if con.execute("SELECT 1 FROM jobs WHERE entity_id=? AND status IN ('QUEUED','RUNNING')", (source_id,)).fetchone():
+                    raise ValueError("来源正在执行任务，请先取消或等待任务完成后再删除")
+            con.execute("UPDATE sources SET deleted_at=? WHERE id=?", (now() if deleted else None, source_id))
+
     def update_candidate_proxies(self, source_id: int, proxy_path: str) -> None:
         with self.connect() as con:
             con.execute("UPDATE candidate_shots SET proxy_path=? WHERE source_id=?", (proxy_path, source_id))
 
     def create_job(self, kind: str, entity_id: int, payload: dict[str, Any] | None = None) -> tuple[int, bool]:
-        if kind not in {"proxy", "analyze"}:
+        if kind not in {"proxy", "analyze", "preflight"}:
             raise ValueError("不支持的后台任务类型")
         with self.connect() as con:
-            existing = con.execute("""SELECT id FROM jobs WHERE kind=? AND entity_id=?
-                AND status IN ('QUEUED','RUNNING') ORDER BY id DESC LIMIT 1""", (kind, entity_id)).fetchone()
+            con.execute("BEGIN IMMEDIATE")
+            source = con.execute("SELECT deleted_at FROM sources WHERE id=?", (entity_id,)).fetchone()
+            if source and source["deleted_at"]:
+                raise ValueError("来源已删除，请先恢复后再操作")
+            existing = con.execute("""SELECT id FROM jobs WHERE entity_id=?
+                AND status IN ('QUEUED','RUNNING') ORDER BY id DESC LIMIT 1""", (entity_id,)).fetchone()
             if existing:
                 return int(existing["id"]), False
             timestamp = now()
@@ -399,14 +419,14 @@ class Database:
 
     @staticmethod
     def _job_queue_fields(con: sqlite3.Connection, job_id: int) -> dict[str, Any]:
-        row = con.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        row = con.execute("SELECT status,kind FROM jobs WHERE id=?", (job_id,)).fetchone()
         status = row["status"] if row else None
         if status != "QUEUED":
             return {"active_job_status": status, "queue_position": None, "queue_ahead": 0}
         queued_before = int(con.execute(
-            "SELECT COUNT(*) FROM jobs WHERE status='QUEUED' AND id<?", (job_id,)
+            "SELECT COUNT(*) FROM jobs WHERE status='QUEUED' AND kind=? AND id<?", (row["kind"], job_id)
         ).fetchone()[0])
-        running = int(con.execute("SELECT COUNT(*) FROM jobs WHERE status='RUNNING'").fetchone()[0])
+        running = int(con.execute("SELECT COUNT(*) FROM jobs WHERE status='RUNNING' AND kind=?", (row["kind"],)).fetchone()[0])
         return {"active_job_status": status, "queue_position": queued_before + 1,
                 "queue_ahead": running + queued_before}
 
@@ -415,11 +435,16 @@ class Database:
             con.execute("UPDATE jobs SET status='RUNNING',attempts=attempts+1,error=NULL,updated_at=? WHERE id=?", (now(), job_id))
 
     def finish_job(self, job_id: int, status: str, result: dict[str, Any] | None = None, error: str | None = None) -> None:
-        if status not in {"DONE", "FAILED"}:
+        if status not in {"DONE", "FAILED", "CANCELLED"}:
             raise ValueError("任务结束状态必须是 DONE 或 FAILED")
         with self.connect() as con:
             con.execute("UPDATE jobs SET status=?,result_json=?,error=?,updated_at=? WHERE id=?",
                         (status, json.dumps(result or {}, ensure_ascii=False), error, now(), job_id))
+
+    def job_progress(self, job_id: int, progress: dict[str, Any]) -> None:
+        with self.connect() as con:
+            con.execute("UPDATE jobs SET result_json=?,updated_at=? WHERE id=? AND status='RUNNING'",
+                        (json.dumps(progress, ensure_ascii=False), now(), job_id))
 
     def fail_interrupted_jobs(self) -> None:
         with self.connect() as con:
@@ -536,7 +561,9 @@ class Database:
             args.extend(bucket_args)
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         with self.connect() as con:
-            rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url FROM candidate_shots c
+            rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url,
+                                    (SELECT notes FROM reviews r WHERE r.candidate_id=c.id ORDER BY r.id DESC LIMIT 1) rejection_reason
+                                    FROM candidate_shots c
                                     JOIN sources s ON s.id=c.source_id {where}
                                     ORDER BY c.score DESC,c.id ASC LIMIT ? OFFSET ?""", args + [limit, offset]).fetchall()
             return [dict(r) for r in rows]
@@ -560,7 +587,7 @@ class Database:
         where = self._final_where(state)
         with self.connect() as con:
             rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url,
-                                    f.qa_status,f.final_path,f.exported_at
+                                    f.qa_status,f.final_path,f.exported_at,f.width,f.height,f.qa_json
                                     FROM candidate_shots c JOIN sources s ON s.id=c.source_id
                                     LEFT JOIN final_clips f ON f.candidate_id=c.id
                                     WHERE {where}
@@ -585,6 +612,8 @@ class Database:
         decision = payload["decision"].upper()
         if decision not in {"ACCEPT", "REJECT", "RESTORE"}:
             raise ValueError("decision 必须是 ACCEPT、REJECT 或 RESTORE")
+        if decision == "ACCEPT" and payload.get("final_viewpoint") not in {"first_person", "third_person"}:
+            raise ValueError("请先选择第一人称或第三人称，再提交接受")
         new_status = {"ACCEPT": "ACCEPTED", "REJECT": "REJECTED", "RESTORE": "WAITING_REVIEW"}[decision]
         with self.connect() as con:
             cur = con.execute(

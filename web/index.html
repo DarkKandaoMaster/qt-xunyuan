@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QT 视频生产工具</title><link rel="stylesheet" href="/static/styles.css"></head>
 <body>
-  <header class="topbar"><div class="brand">QT 视频数据生产工具 <small>本地 MVP</small></div><nav class="nav"><a class="active" href="/">生产台</a><a href="/review">人工审核</a></nav></header>
+  <header class="topbar"><div class="brand">QT 视频数据生产工具 <small>本地 MVP</small></div><nav class="nav"><a class="active" href="/">生产台</a><a href="/static/topic-library.html">寻源题材库</a><a href="/review">人工审核</a></nav></header>
   <main class="page">
     <section class="grid metrics" id="metrics"></section>
     <section class="grid two-col">
@@ -18,7 +18,7 @@
       </div>
     </section>
     <section class="card" style="margin-top:14px">
-      <div class="section-head"><div><h2>候选来源</h2><p>仅显示不超过 10 分钟的来源；代理永远不能进入交付目录。</p></div><div class="list-controls"><select id="sources-bucket-filter" aria-label="候选来源分类"></select><button class="secondary" id="refresh">刷新</button></div></div>
+      <div class="section-head"><div><h2>候选来源</h2><p>先看缩略图初筛，下载前自动检查原片规格。优先下载当前页高分的 3 个来源；可取消下载。</p></div><div class="list-controls"><select id="sources-bucket-filter" aria-label="候选来源分类"></select><button onclick="downloadTopThree(this)">优先下载本页 3 个</button><button class="secondary" id="refresh">刷新</button></div></div>
       <div style="overflow:auto"><table class="source-table"><thead><tr><th>来源</th><th>目标</th><th>时长 / 分辨率</th><th>分数</th><th>状态</th><th>操作</th></tr></thead><tbody id="sources"></tbody></table></div>
       <div class="pagination" id="sources-pagination"></div>
     </section>
@@ -27,6 +27,12 @@
       <div style="overflow:auto"><table class="source-table"><thead><tr><th>来源</th><th>目标</th><th>时长 / 分辨率</th><th>候选片段</th><th>状态</th><th>操作</th></tr></thead><tbody id="analyzed-sources"></tbody></table></div>
       <div class="pagination" id="analyzed-pagination"></div>
     </section>
+    <details class="card" style="margin-top:14px">
+      <summary>已删除来源（误删可恢复）</summary>
+      <p>仅从来源列表移除，保留已有文件和审核记录。重新搜索相同来源不会自动恢复。</p>
+      <table><thead><tr><th>来源</th><th>目标</th><th>分辨率</th><th>操作</th></tr></thead><tbody id="deleted-sources"></tbody></table>
+      <div class="pagination" id="deleted-pagination"></div>
+    </details>
     <section class="grid two-col">
       <div class="card"><div class="section-head"><div><h2>已接受 · 最终处理</h2><p>下载高质量源、精确剪片、独立 QA 并整理目录。</p></div><button id="export" class="secondary">导出交付表</button></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>时长</th><th>操作</th></tr></thead><tbody id="accepted"></tbody></table></div><div class="pagination" id="accepted-pagination"></div></div>
       <div class="card"><div class="section-head"><div><h2>已处理</h2><p>最终处理成功且已写入交付表的候选；可移回最终处理列表。</p></div></div><div style="overflow:auto"><table><thead><tr><th>候选</th><th>标签</th><th>交付时间</th><th>操作</th></tr></thead><tbody id="processed"></tbody></table></div><div class="pagination" id="processed-pagination"></div></div>

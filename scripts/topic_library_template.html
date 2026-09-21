@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QT 具体活动寻源题材库</title>
+<style>
+:root{color-scheme:dark;--bg:#101419;--panel:#192129;--line:#35424d;--muted:#b0bdc7;--accent:#94dfbc}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef3f6;font:15px/1.65 'Microsoft YaHei',system-ui,sans-serif}button,input,select{font:inherit}button,a,input,select{outline-offset:4px}a{color:var(--accent)}button{cursor:pointer}header{padding:20px 28px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;align-items:center}header h1{font-size:23px;margin:0}header p{color:var(--muted);margin:3px 0 0}header a{white-space:nowrap}.layout{display:grid;grid-template-columns:245px minmax(0,1fr);max-width:1600px;margin:auto}aside{position:sticky;top:0;height:100vh;overflow-y:auto;padding:20px 14px;border-right:1px solid var(--line)}main{min-width:0;padding:24px 28px 70px}button,.action{border:1px solid var(--line);background:#25313c;color:#eef3f6;border-radius:8px;padding:8px 12px;text-decoration:none;display:inline-block}.primary{background:var(--accent);color:#10261c;border-color:var(--accent)}button:hover,.action:hover{filter:brightness(1.13)}.bucket{width:100%;text-align:left;margin-top:12px;font-weight:700}.unit-link{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--muted);margin:3px 0;padding:7px 10px;font-size:13px}.unit-link.active,.bucket.active{background:#284d40;color:#c2ffe1}.filters{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}input[type=search]{flex:1;min-width:180px;background:#0e151c;color:white;border:1px solid var(--line);border-radius:8px;padding:12px}select{background:#25313c;color:white;border:1px solid var(--line);padding:10px;border-radius:8px}.guide{border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:0 0 20px;color:var(--muted)}summary{cursor:pointer;color:#eef3f6;font-weight:600}.guide p{margin:10px 0}.result-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.result-head h2{font-size:24px;margin:10px 0}.muted{color:var(--muted)}.unit{margin:20px 0 32px;scroll-margin-top:20px}.unit-head{border-bottom:1px solid var(--line);padding-bottom:14px}.unit h3{font-size:21px;margin:0 0 8px}.tag{display:inline-block;padding:2px 9px;border-radius:20px;background:#30473e;color:#bff1d7;font-size:12px;margin-left:8px;vertical-align:middle}.hard{background:#51432e;color:#ffe0a0}.requirements{font-size:14px;color:var(--muted)}.requirements p{margin:7px 0}.requirements strong{color:#edf3f7}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;min-width:0}.card h4{margin:0;font-size:17px}.query{font-family:Consolas,monospace;color:var(--accent);font-size:16px;overflow-wrap:anywhere;margin:10px 0}.check{color:var(--muted);margin:0 0 16px;font-size:14px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}.actions>*{font-size:13px}.notice{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);padding:12px 20px;background:#def5e7;color:#133823;border-radius:10px;box-shadow:0 4px 24px #0008;max-width:90vw;z-index:10}.empty{padding:40px 0;color:var(--muted)}footer{border-top:1px solid var(--line);padding-top:20px;font-size:13px;color:var(--muted)}.mobile-nav{display:none}label{color:var(--muted)}@media(max-width:1000px){.cards{grid-template-columns:1fr}.layout{grid-template-columns:215px minmax(0,1fr)}main{padding:20px}}@media(max-width:700px){header{padding:16px;align-items:flex-start;flex-direction:column}.layout{display:block}aside{display:none}.mobile-nav{display:block;width:100%;margin-bottom:14px}main{padding:16px}.filters input{width:100%}.result-head h2{font-size:20px}}@media print{body{background:white;color:black}header a,aside,.filters,.mobile-nav,.actions,.notice,.guide{display:none}.layout{display:block}main{padding:0}.cards{display:block}.card{break-inside:avoid;background:white;color:black;margin-bottom:12px}.query,.muted,.check,.requirements{color:#333}.requirements strong{color:black}}
+</style>
+</head>
+<body>
+<header><div><h1>QT 具体活动寻源题材库</h1><p>先搜索活动与作品，再用画面判断是否合格 · 新版 2026年9月21日</p></div><a id="home" href="/">返回生产台</a></header>
+<div class="layout"><aside aria-label="按桶和统合单元选择"><button class="bucket" data-select="all">全部题材</button><div id="nav"></div></aside>
+<main><select class="mobile-nav" id="mobile" aria-label="选择统合单元"></select>
+<div class="filters"><input id="search" type="search" placeholder="全库查找活动或关键词，例如 涉水、梳毛、T7.2" aria-label="搜索全部题材"><label><input id="fourk" type="checkbox"> 搜索时附加 4K</label><button id="clear">重置筛选</button></div>
+<details class="guide"><summary>怎么用这版题材库</summary>
+<p>点左侧 T1.1 等单元查看活动。复制英文短词，或直接去 YouTube 搜索；“填入生产台”只填写关键词和目标单元，不自动搜索、不下载。页面可离线浏览，外部搜索需联网。</p>
+<p>先试：活动与规则关系直接，建议优先试搜。补充：题材可用，但拍法或素材质量更需要筛选。难搜：连续镜头、机位或规则条件较苛刻。此排序是按规则适配程度推导，不是已测得的命中率；所有题材都需要实际验片。</p>
+<p>先单独搜题材，不要把“第三人称＋主体明确＋实时＋结果可见”等验收句拼进标题搜索。结果太杂时只追加一个拍法词，如 POV、follow cam、one take；结果太少先去掉 4K。标题里写4K、POV或one take都不能替代核验。</p>
+<p>POV词仅用于找第一人称线索。第三人称应确认人物或载具持续在画面内；固定监控、纯无人空镜、顶拍手部不能只按题材名称放行。T3/T4重点补第一人称，其余多数桶重点补第三人称，实际搜索前看工作台剩余配额。</p>
+<p>通用检查：单镜头连续至少5秒，动作起止完整，横屏宽高比1.5至2，背景清晰，稳定无畸变，无变焦，无字幕/UI/黑边；有原声且不被音乐完全掩盖。T1至T8实拍及合规实拍特效合成，原生2K以上且≥24fps；T9动画可1080P、按原作帧率。仅T8.4允许刻意慢速摄影，所有桶均不收游戏录制。</p>
+<p>先看原站画面与可用格式，再决定是否下载代理。选取动作完整的片段，不能为去掉主体丢失而把动作截在一半；不要用放大、插帧或拼接凑合格。来源可追溯不等于已取得使用授权。</p>
+</details>
+<div class="result-head"><h2 id="heading"></h2><span class="muted" id="count"></span></div>
+<div id="results"></div>
+<footer><strong>规则来源与适用范围</strong><p>依据《QT寻源数据规则（供应商用）》第四章的“找什么”“合格标准”“不合格／排除”及通用红线整理；每个单元标有原文页码。数量为原文规划，不是当前待交付缺口。本页题材和搜索词为扩展建议，不是新增验收规则，也不代表对应视频已验证合格。</p><p>按已确认口径覆盖第四章有详细规则的全部53个单元，包括T5.6、T5.7、T7.6至T7.8和T9.5；不虚构T3.6、T4.5、T4.6、T8.5。T8.2航拍与R13、T6.2未提供的玩法清单等未决问题在对应单元提示，不能靠关键词消除规则冲突。</p><p>同一活动可适配不同单元，按实际画面主看点归类，不把同一片段重复算作多个交付。T2与T9要从作品或作者找素材；T6不能省略环视／回访要求。若想提高命中率，先各试少量来源，保留有效频道，再扩展同系列。</p></footer>
+</main></div><div class="notice" id="toast" role="status" hidden></div>
+<script>
+const units = /* TOPICS_DATA */[];
+const buckets={T1:'高动态与载具',T2:'万能交互',T3:'社交交互',T4:'日常操作',T5:'环境动态',T6:'空间探索',T7:'物理',T8:'影视美感',T9:'风格化'};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const home=location.protocol==='file:'?'http://127.0.0.1:8765/':new URL('/',location.href).href;
+$('#home').href=home;
+let selected=decodeURIComponent(location.hash.slice(1))||'T1.1';
+if(!units.some(u=>u.id===selected)&&!buckets[selected]&&selected!=='all')selected='T1.1';
+let timer;
+function toast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(timer);timer=setTimeout(()=>$('#toast').hidden=true,3000)}
+function buildNav(){
+ $('#nav').innerHTML=Object.entries(buckets).map(([b,name])=>`<button class="bucket" data-select="${b}">${b} ${name}</button>${units.filter(u=>u.id.startsWith(b+'.')).map(u=>`<button class="unit-link" data-select="${u.id}">${u.id} ${esc(u.name)}</button>`).join('')}`).join('');
+ $('#mobile').innerHTML='<option value="all">全部题材</option>'+Object.entries(buckets).map(([b,name])=>`<optgroup label="${b} ${name}"><option value="${b}">${b} 全部单元</option>${units.filter(u=>u.id.startsWith(b+'.')).map(u=>`<option value="${u.id}">${u.id} ${esc(u.name)}</option>`).join('')}</optgroup>`).join('');
+}
+function queryFor(topic){return topic.query+($('#fourk').checked&&!/\b4k\b/i.test(topic.query)?' 4K':'')}
+function render(){
+ const term=$('#search').value.trim().toLowerCase();
+ const shown=units.map(u=>({...u,topics:u.topics.filter(t=>!term||[u.id,u.name,t.label,t.query,t.check].join(' ').toLowerCase().includes(term))})).filter(u=>u.topics.length&&(term||selected==='all'||u.id===selected||u.id.startsWith(selected+'.')));
+ $('#heading').textContent=term?'全库搜索结果':selected==='all'?'全部活动题材':buckets[selected]?selected+' '+buckets[selected]:selected+' '+units.find(u=>u.id===selected).name;
+ const total=units.reduce((n,u)=>n+u.topics.length,0);
+ $('#count').textContent=`显示 ${shown.length} 个单元 · ${shown.reduce((n,u)=>n+u.topics.length,0)} 个题材 / 全库 ${total} 个`;
+ document.querySelectorAll('[data-select]').forEach(b=>{const active=!term&&b.dataset.select===selected;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))});
+ $('#mobile').value=selected;
+ $('#results').innerHTML=shown.length?shown.map(u=>`<section class="unit"><div class="unit-head"><h3>${u.id} ${esc(u.name)}<span class="tag ${u.priority==='难搜'?'hard':''}">${u.priority}</span></h3><div class="requirements"><p><strong>找什么</strong>　${esc(u.find)}</p><p><strong>合格重点</strong>　${esc(u.pass)}</p><p><strong>排除</strong>　${esc(u.exclude||'仍须遵守通用红线')}</p><p><strong>选片提醒</strong>　${esc(u.note)}</p><p>原文第 ${u.page} 页 · 规划 ${u.target} 条（第一人称 ${u.first_person} / 第三人称 ${u.third_person}）</p></div></div><div class="cards">${u.topics.map(t=>{const q=queryFor(t);return `<article class="card"><h4>${esc(t.label)}</h4><p class="query">${esc(q)}</p><p class="check">选片时看：${esc(t.check)}</p><div class="actions"><button class="copy" data-query="${esc(q)}">复制关键词</button><a class="action primary" target="_blank" rel="noopener noreferrer" href="https://www.youtube.com/results?search_query=${encodeURIComponent(q)}">YouTube 搜索 ↗</a><a class="action" href="${esc(home)}?topic_query=${encodeURIComponent(q)}&topic_unit=${encodeURIComponent(u.id)}">填入生产台</a></div></article>`}).join('')}</div></section>`).join(''):'<p class="empty">没有匹配的题材。试试更短的活动名称，或输入单元编号。</p>';
+}
+function select(value){selected=value;$('#search').value='';location.hash=value;render();window.scrollTo({top:0,behavior:'smooth'})}
+document.addEventListener('click',async e=>{const nav=e.target.closest('[data-select]');if(nav)select(nav.dataset.select);const copy=e.target.closest('.copy');if(copy){try{await navigator.clipboard.writeText(copy.dataset.query);toast('关键词已复制')}catch(_){const input=document.createElement('textarea');input.value=copy.dataset.query;document.body.append(input);input.select();const ok=document.execCommand('copy');input.remove();toast(ok?'关键词已复制':'复制受限，请直接选中英文关键词复制')}}});
+$('#mobile').addEventListener('change',e=>select(e.target.value));$('#search').addEventListener('input',render);$('#fourk').addEventListener('change',render);$('#clear').addEventListener('click',()=>{$('#fourk').checked=false;select('T1.1')});
+window.addEventListener('hashchange',()=>{const key=decodeURIComponent(location.hash.slice(1));if(key==='all'||buckets[key]||units.some(u=>u.id===key)){selected=key;$('#search').value='';render()}});
+buildNav();render();
+</script></body></html>

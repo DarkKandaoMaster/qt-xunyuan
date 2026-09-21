@@ -1,0 +1,388 @@
+# 单元|筛选重点与边界补充。其后每行：具体题材|短搜索词|需要看到的画面
+@T1.1|先试|保留起跑、越障与落地缓冲；人物持续可见。无人机跟拍不能因“跟拍”就忽略地面视角要求。
+城市跑酷连续线路|parkour lines|跟着同一跑者跨越多个障碍，完整落地。
+自由跑障碍串联|freerunning line|从接近障碍到翻越再到站稳，不取剪辑集锦。
+跑酷追逐|parkour chase|追踪一个明确跑者，急转和加减速连续。
+障碍赛训练|obstacle course training|同一运动员连续翻墙或越栏，器械和人均清楚。
+栏架冲刺训练|hurdle sprint training|接近、起跨、落地完整，避免只截半次跨栏。
+林道越野跑跟拍|trail running follow cam|跑者持续在画面里，地形与脚步变化可见。
+@T1.2|先试|看人体动作、器材运动与空间变化；近距离跟随优于大远景转播。不要把滑板自行车归成机动车。
+滑板连续招式线路|skateboarding line|滑手、板和落地同时可见，留足收尾。
+轮滑街道跟拍|inline skating follow cam|跟随一个滑手，看转弯和滑行变化。
+小轮车场地线路|BMX park run|骑手与自行车完整可辨，跳跃与落地连续。
+山地自行车跟拍|mountain biking follow cam|前车骑手持续可见，排除强烈抖动与鱼眼。
+篮球突破训练|basketball drive drill|运球、突破、上篮为连续动作，不只拍篮筐。
+足球带球射门训练|football dribbling shooting drill|带球至射门完整，人物和球不出画。
+@T1.3|难搜|原文要求过山车、蹦极、跳伞三项均覆盖。空中题材与R13存在适用疑点时需确认，不能自行扩大豁免。
+过山车前排实录|roller coaster front seat POV|保留加速或失重全过程，检查畸变与字幕。
+蹦极完整跳跃|bungee jump full jump|从起跳到绳索回弹完整，主体不丢失。
+双人跳伞外部摄影|tandem skydive outside camera|外部摄影师跟着跳伞者，核对视角适用口径。
+翼装伴飞|wingsuit follow camera|持续跟随同一翼装者，非剪辑合辑。
+滑翔伞外部跟拍|paragliding follow cam|明确飞行主体及升降变化，先核对单元边界。
+贴地穿越飞行|FPV low altitude flight|源文列举题材，但纯无人机眼睛视角及畸变需重点复核。
+@T1.4|补充|必须是实拍或实拍特效合成；攻击、受击或躲避有可见反馈。片名只是定位线索，不保证片段符合。
+特技团队单镜头打斗|stunt fight one take|双方同框，攻击与规避连续，非幕后讲解。
+近身武术对打|martial arts fight short film|从出招到格挡受力有反馈，避开游戏与动画。
+走廊连续打斗|hallway fight scene|挑实际连续镜头，排除正反打和快速剪切。
+剑术特技短片|sword fight stunt short film|武器与双方身体清楚，动作无穿帮。
+追逐中翻越躲闪|foot chase stunt scene|主体主动规避障碍，落地及反应完整。
+实拍爆破规避|explosion escape movie scene|人物规避和爆破反馈同镜头，注意内容合规。
+@T1.5|先试|水体扰动、气泡或光影变化要可见；跟潜水员而非只看珊瑚空镜，严重浑浊不收。
+自由潜水下潜|freediving descent|完整跟随潜水者下潜，周围水体清晰。
+自由潜水上浮|freediving ascent|上浮动作及水面变化连续，主体持续可见。
+水肺潜水跟拍|scuba diver follow cam|潜水员游动、气泡和背景同时清楚。
+水下游泳跟拍|underwater swimming tracking shot|游泳者全身与推进水流可读。
+人鱼潜水实拍|mermaid swimming underwater|真人水下运动，排除动画、浓重滤镜和定姿摆拍。
+浮潜同伴跟随|snorkeling follow diver|镜头跟随同伴移动，不只拍水下景观。
+@T1.6|先试|强调真实机动车速度与位移，外部地面跟拍优先；纯行车记录监控、航拍俯视需排除或复核。
+摩托车滚动跟拍|motorcycle rolling shots|相机与骑手同步移动，看清车与道路。
+汽车行驶跟拍|car rolling shots|同一辆车持续在画面中，非广告蒙太奇。
+拉力赛车路段|rally car tracking shot|地面追踪过弯，不选远景赛事切机位。
+越野车连续过弯|off road driving follow cam|车体、路面和空间位移可读。
+卡丁车跟随|karting follow cam|跟随明确车辆，排除游戏和叠加计时UI。
+驾驶位泊车过程|parking POV|方向操作到车停稳完整，不能只有静止仪表盘。
+@T1.7|补充|本单元有R13空中视角豁免；区分拍飞机与纯风景航拍，明确驾驶位或外部载具主体。
+直升机座舱飞行|helicopter cockpit flight|座舱视角下有连续飞行位移，非静态仪表展示。
+轻型飞机起飞|light aircraft takeoff cockpit|起飞动作连续，检查字幕仪表叠加与畸变。
+滑翔机座舱|glider cockpit flight|飞行与转向可辨，保持原速。
+飞机编队伴飞|formation flying air to air|锁定一架飞机，可见姿态变化与空间关系。
+无人机追踪飞机|drone following plane|外部主体始终清晰，非纯CG。
+直升机外部跟拍|helicopter air to air footage|持续跟随真实直升机，不取剪辑合集。
+@T1.8|先试|水面变化和载具运动都要可辨，外部跟拍为主；岸上固定远景或航拍不能直接视为合格。
+摩托艇水面跟拍|jet ski follow cam|骑手、艇和水花同画面，转弯完整。
+快艇并行跟拍|speedboat tracking shot|相邻船上平视跟拍，艇与浪花连续可见。
+帆船航行跟拍|sailing boat tracking shot|船体航行与水面反馈可见，非纯甲板静景。
+皮划艇跟随|kayak follow cam|艇与划行运动清楚，背景不虚化。
+划艇水上训练|rowing boat training|艇员动作与船体位移同步，避开大远景赛事。
+船长驾驶位进港|boat docking POV|操作、船体运动及水面空间变化连续。
+@T1.9|难搜|要求影视实拍底与干净合成，保留上下舱或模式切换；纯CG飞船与游戏过场不能冒充实拍。
+真人穿戴机械战甲|Iron Man suit up scene|人进入或战甲闭合过程，核对实拍底与单镜头长度。
+沙丘扑翼机登舱|Dune ornithopter boarding scene|人物、舱门与登舱动作完整，非模型展示。
+阿凡达机甲驾驶|Avatar AMP suit scene|真人进入或操纵机甲的连续段。
+星际飞船登船|Star Wars boarding ship scene|人上舷梯到舱内连续，不能跨切镜拼接。
+科幻载具舱盖开启|sci fi cockpit opening scene|主体与舱盖运动同框，有模式切换过程。
+实拍机械外骨骼短片|live action exoskeleton short film|实拍人物与装置交互，非纯产品渲染。
+@T2.1|难搜|只找科幻魔幻影视。触发与世界内反馈必须同镜头；写if→then，并按单部作品累计至少8种动作、4种场景。以下是场景定位词，不是已验收片段。
+手势打开传送门|Doctor Strange portal scene|手势到门形成连续；排除教程、游戏、绿幕素材。
+魔杖令物体悬浮|Harry Potter Wingardium Leviosa scene|施法者、手势与物体升起同镜头可见。
+意念移动金属|Magneto moving metal movie scene|人物动作到金属位移有明确因果。
+机械战甲响应手势|Iron Man suit assembly scene|角色触发到机械装配响应连续。
+触碰启动全息装置|Iron Man hologram scene|手部触发与世界内全息变化同框；不可只有屏幕文字。
+原力推开物体|Star Wars Force push scene|角色施力与对象位移同一镜头，非游戏演示。
+身份识别开启通道|sci fi biometric door scene|扫描与门打开可见，不能仅播“已通过”字幕。
+激活能量护盾|live action energy shield scene|动作触发后护盾显现，合成边缘干净。
+科幻舱门感应开启|spaceship automatic door movie scene|人物靠近到门开启连续，非现实商场自动门。
+魔法点亮物体|Harry Potter Lumos scene|施法动作到可见发光完整，避免只有念咒音频。
+@T2.2|难搜|不能把普通逛街改名为万能交互。要移动到不同点位并交互，反馈可见；单部作品仍需累计8种动作、4种场景。
+实验室走动操控全息物|Iron Man lab scene|人物走动并实际操控装置，不只站着讲解。
+魔法工坊多处施法|wizard workshop live action scene|同一人物移动、接触或施法，环境有响应。
+科幻舰桥走动操作|spaceship bridge movie scene|走到控制位再操作，有世界内可视反馈。
+未来实验室参观交互|sci fi laboratory walkthrough scene|人物边走边启动多个实体装置，非建筑渲染。
+魔法商店试用物件|Harry Potter wand shop scene|移动和试用魔法物件同一连续段。
+空间站机器人互动|space station robot interaction scene|跟随角色移动，机器人有动作回应而非纯对谈。
+移动中操纵悬浮物|telekinesis walking movie scene|人物位移与物体响应同时成立，非纯追逐。
+科幻短片智能房间|smart room sci fi short film|真人走动触发房间变化，不是现实家居开关演示。
+@T3.1|先试|要看到接近→接触→持续→分开，以及动物或人的回应。镜头锚定发起方；POV是机位，不是标题保证。
+主人给狗梳毛|dog brushing POV|手接近、梳理、狗反应及结束都在镜头里。
+给马刷毛|horse grooming POV|操作者手部与马的回应清楚，不只拍刷子。
+抚摸猫咪|petting cat POV|猫蹭手或转头回应，不能开头手已经贴着猫。
+手喂山羊|hand feeding goats POV|递食、取食和手撤回连续，有活体响应。
+给狗洗澡|dog bathing POV|接触和狗的反应可读，排除固定顶拍教程。
+人与人拥抱重逢|reunion hug one take|接近、拥抱、回抱与分开完整，背景不能虚化。
+握手问候|handshake POV|伸手、握住、回应、松开完整，时长足够。
+给马挠痒互动|scratching horse POV|人主动接触，马有可读回应，不是玩偶演示。
+@T3.2|补充|双方停步面对面且有手势、重心或朝向变化；第三人称两人同框，第一人称单向看对方。排除采访正反打。
+站立手语对话|standing sign language conversation|两人面对面，手势与回应连续同框。
+问路现场互动|asking directions POV|停步后看对方指路，自己视线位置符合POV。
+街头魔术面对面交流|street magician spectator interaction|只取站定交流与回应，不是单人技巧特写。
+站立双人表演练习|two person acting scene one take|面向彼此有微动作，非静态朗读或切机位。
+游客与向导停步交流|guide visitor conversation|两人保持面对面，手势和眼神可读。
+交易前站立商谈|market conversation POV|停步与摊主面对面回应，避开多人拥挤遮挡。
+@T3.3|先试|同伴身体可见，行走中有等待、放慢、侧头交流或间距调整。只拍脚与路应转查T6。
+与朋友徒步|hiking with friend POV|同伴在前方等候或回头交流，行走不断。
+双人边走边聊|walking and talking one take|两人持续同行，动态速度匹配可读。
+跟随登山向导|following hiking guide|向导放慢等人或指路，主体不离开画面。
+情侣公园漫步|couple walking talking|同伴并肩回应，避免浅景深爱情短片。
+陪长者散步|walking with elderly parent|步速匹配、搀扶或侧头回应连续。
+两人逛市场|market walk with friend|同伴身体持续可见，不是无人称市场风景。
+@T3.4|先试|一方行动、另一方明确回应，触发→过程→反馈同镜头；合作关系比单纯同时出现更重要。
+双人传接球|playing catch POV|抛球与对方接住完整，不要球出画后切镜。
+同伴拉上岩台|helping friend climb|伸手、握住、拉起和站稳完整。
+双人搬桌子|two people moving table|能看出双方配合移动及放稳结果。
+木工递工具|handing tools workshop POV|递出、对方接住和开始使用，非只拍手中工具。
+户外协作搭帐篷|two people pitching tent|一方扶杆另一方接应，选完整合作动作。
+指挥同伴倒车|guiding car parking|手势后车辆响应同镜头，操作者主体清楚。
+@T3.5|难搜|原文同时要求面部清晰、背景不虚化和单镜头；第三人称优先找双方同框。第一人称与“双方面部同框”文字存在张力，需单独确认，不能默认放宽。
+双人凝视挑战|eye contact experiment two people|双方眼睛可辨，有回视或微表情，连续至少5秒。
+双人无声表演|silent acting scene two people|有明确互相对视和表情回应，不是独白。
+舞伴起舞前对视|dance partners eye contact|保留对视回应的完整段，避免切到眼睛特写。
+情侣无声凝视|couple eye contact one take|两张脸同框，背景仍清晰，非照片推拉。
+双人默剧交流|two person mime scene|视线交流清楚，有眨眼点头等回应。
+影视双人持续凝视|two shot silent movie scene|单景别连续对视，避开正反打和背景虚化。
+@T4.1|先试|以操作者头胸位置拍手部生活动作；不是顶拍桌面，也不是只有食物或手机特写。完成动作再收尾。
+第一视角吃早餐|eating breakfast POV|拿起食物、入口动作及放下自然连续。
+第一视角喝茶|drinking tea POV|举杯到饮用再放回，手杯均可辨。
+第一视角读纸书|reading book POV|翻页、持书动作可见，非书页静物。
+第一视角读报|reading newspaper POV|展开、阅读调整与折回有实际手部动作。
+操作实体手机|using phone POV|手实际操控手机，排除屏幕录制或后期UI叠加。
+野餐进食|picnic eating POV|以本人手部操作为主，原声与背景清晰。
+@T4.2|先试|核心是物体自身状态改变；不只移动物件。手接触到结果完整，排除时间流逝剪辑和加速教程。
+切蔬菜|chopping vegetables POV|刀落下、菜切开完整，避免仅俯拍手。
+揉面团|kneading dough POV|手施力令面团形状改变，保留连续动作。
+打鸡蛋搅拌|whisking eggs POV|从搅拌到液体混合可见，非结果展示。
+手写字迹|handwriting POV|笔尖接触到留下字迹完整，机位符合第一人称。
+拧紧螺丝|screwdriver repair POV|转动后连接状态改变，不只是摆放工具。
+刷洗鞋子|shoe cleaning POV|刷洗令污渍明显减少，非前后对比跳切。
+玻璃擦洗|window cleaning POV|擦拭轨迹与干净区域形成可见。
+削木制作|wood carving POV|刀接触到木屑脱离，注意工具安全内容与画面稳定。
+手工缝线|hand sewing POV|针线穿过材料并形成缝合结果，背景仍可辨。
+包饺子|dumpling folding POV|从皮与馅到封口成形，一次动作完整。
+@T4.3|先试|只收拿放、收纳与位置变化，物体性质或形状改变优先查T4.2；需要真实手参与。
+摆餐具|setting table POV|手拿餐具到放稳，物品位置变化清楚。
+整理工具箱|organizing toolbox POV|拿出或放回单个工具，手与对象连续可见。
+书架整理|organizing bookshelf POV|拿书、移动、放入书架完整。
+餐盘端放|serving plates POV|搬运到桌面放稳，避免人群遮挡。
+水果装篮|sorting fruit POV|抓取到归位连续，不选切水果状态改变。
+行李收纳|packing suitcase POV|手把衣物物件放入行李箱，避免快放。
+倒水入杯|pouring water POV|容器倾斜到液体转移完整；按主看点区分T7液体反馈。
+零件分类归位|sorting parts POV|手与零件相对位移清楚，不是机器自动分拣。
+@T4.4|先试|镜头跟手操作开合，整批每类要有开和关；若主要内容是穿门进入空间则查T6.4。
+开关冰箱|opening closing fridge POV|手抓把手到打开、关闭动作完整。
+抽屉开关|opening closing drawer POV|操作手、抽屉和行程同时可见。
+窗户开关|opening closing window POV|手推拉或旋转开关，留足起止。
+橱柜开关|opening closing cabinet POV|柜门从闭合到开启或反向完整。
+房门手柄开合|opening closing door POV|拍手柄与门的交互，不以走进房间为主。
+车门开关|opening closing car door POV|本人操作把手和门板，排除广告切镜。
+@T5.1|补充|关注载具移动造成环境过渡，首尾环境明显不同；纯高速刺激偏T1.6。非豁免单元不优先航拍。
+开车驶出隧道|driving out of tunnel POV|隧道到外部明暗和空间变化完整，不严重过曝。
+开车驶入隧道|driving into tunnel POV|车辆移动与外部环境转暗连续。
+乡村开车进入村镇|country road into village drive|首尾环境可辨，驾驶位成立而非监控机位。
+摩托车驶出森林|motorcycle forest road POV|林地到开阔路段空间改变连续。
+火车出隧道驾驶位|train cab tunnel exit|真实驾驶位与环境过渡，不能有叠加HUD。
+船只出港|boat leaving harbor POV|港池到开阔水域连续，保留明确载具视角。
+@T5.2|难搜|本单元强制第三人称，至少事件两个变化阶段；不要强塞人物，锚定明确事件并核对R11，避免固定监控与POV涉险。
+巨浪冲击防波堤|wave hitting breakwater|浪接近、撞击、扩散消退至少两个阶段。
+潮涌推进|tidal bore approaching|锚定同一波前，看增强与传播，非纯远景空镜。
+瀑布洪峰到来|waterfall surge|水流由弱到强或扩散可辨，非恒定瀑布壁纸。
+雪崩扩散实录|avalanche real time footage|追随雪崩前沿及扩散，旁观安全视角。
+火山喷发过程|volcano eruption real time|喷出与扩散阶段可见，排除延时与新闻叠字。
+暴雨阵风吹动树木|storm gust bending trees|锚定受影响树木或阵风过程，不是雨声背景片。
+@T5.3|先试|至少两个主体有协作、对抗或连续配合；镜头锁定一组明确主体，排除无人称广场大远景。
+双人摇摆舞|swing dance couple full dance|搭档持续配合，全身清楚，无多机位。
+双人杂技平衡|partner acrobatics routine|互相支撑、转移与落地完整。
+双人花式跳绳|double dutch routine|摇绳人与跳绳者关系清楚，同镜头持续。
+武术双人套路|martial arts partner routine|双方连续呼应，非独练或纯暴力片段。
+舞狮配合表演|lion dance full performance|明确团队共同控制动作，原声可闻。
+牧羊犬与训犬员表演|dog handler agility demonstration|人与动物明确配合，不是动物单独跑动。
+@T5.4|补充|强制第三人称旁观；载具进入→经过→驶离完整。与R11结合时跟随明确车辆或群体，避免固定监控。
+电车通过街道路口|tram passing intersection|追随同一电车通过路口，周边交通可读。
+铁路道口列车经过|train passing level crossing|进入、通过与驶离连续，不选远景静机监控。
+渡轮进出港|ferry arriving harbor|载具路线、码头关系明确，地面视角。
+拉力赛车驶过发卡弯|rally car hairpin spectator|旁观跟随一辆车完整经过，无赛事UI。
+机场牵引机拖飞机|aircraft pushback ground view|牵引车与飞机路线关系可见，非航拍。
+港口拖轮协作|tugboat harbor maneuver|跟随明确船组，航线与空间关系清楚。
+@T5.5|补充|至少两个传递节点且触发→传递→结果完整；单次碰撞归T7.2。不能只拍机器空转或中途接链。
+多米诺连续倒下|domino chain reaction|保留初始触发与后续多节点结果，主体锚定需检查。
+真人鲁布戈德堡装置|Rube Goldberg machine one take|看得到触发者或触发装置与完整传递链。
+三人传接球|three person passing drill|球经不同参与者传递到最终接住。
+团队递砖|brick passing chain|多人节点连续传递，镜头能读出完整因果链。
+水桶接力|bucket brigade|起点、传递与倒入终点可见，非拼接集锦。
+餐厅接力传盘|kitchen plate passing line|多位人员依次传递至接收，原声与空间关系清楚。
+@T5.6|补充|拍明确摊主、巡游队伍或参与者与动态环境；禁止无人机。日夜覆盖是整批分布，不要求单条由白天变夜晚。
+夜市摊主出餐|night market vendor serving|跟着明确摊主，周边客流和摊位动态可辨。
+街头巡游乐队|marching band street parade|地面跟随同一队伍，非广角远景全场扫摄。
+舞龙巡游|dragon dance street parade|锚定表演队伍，环境人群与动态共同可见。
+灯笼节人群游行|lantern festival parade|锁定参与者或队伍，夜间不过暗。
+节庆摊位互动|festival stall vendor|摊主与顾客在活跃环境中互动，无字幕UI。
+演出散场人群跟随|concert crowd leaving|锁定一组离场观众，不是固定监控或纯背影空镜。
+@T5.7|补充|群体须聚集、分流、转向或变队形，至少一次方向变化；密度分档是整批覆盖。孤立个体不算群体。
+牧羊犬驱赶羊群|sheepdog herding sheep|羊群受引导转向，镜头追随明确群体。
+鸭群跟随饲养员|ducks following farmer|队伍方向变化可读，非零散动物。
+马群驱赶转向|horse herd moving|跟随同一群体转弯，避免航拍俯视。
+鱼群转向实拍|school of fish turning|明确鱼群整体方向变化，不是水族静景。
+游行队伍转弯|parade turning corner|同一队伍转向与队形变化，地面拍摄。
+人群离站分流|crowd leaving station|锚定一组可辨人流，出现分流或转向，避开监控视角。
+@T6.1|难搜|除地标可辨还需身体位移与360度环视或二次回访；优先跟随人物的向导路线。普通walking tour多是POV，不能补第三人称。
+导游带走埃菲尔铁塔周边|Eiffel Tower guided walk|向导身体持续可见，路线含环视或回到原位置。
+罗马斗兽场实地导览|Colosseum guided tour|地标可辨且跟着同一向导移动，非历史解说拼图。
+金门大桥行人跟拍|Golden Gate Bridge walking tour|找同伴或向导主体并检查回访，不能只看桥。
+长城徒步跟随|Great Wall hiking follow cam|人物与长城都清楚，保留环视或回访段。
+圣米歇尔山步行导览|Mont Saint Michel guided walk|跟随人物穿行，需自然回看或路线回访。
+悉尼歌剧院周边漫游|Sydney Opera House guided walk|地标、人物与空间关系明确，检查单镜头要求。
+@T6.2|难搜|原文要求“与玩法清单对齐”，未提供清单，以下只作待确认线索；还需环视或回访，不能默认旅游拍摄就属于经典影视场景。
+哈利波特实景片场导览|Harry Potter studio guided tour|人物引导空间移动，先确认场景与玩法清单。
+霍比屯实地导览|Hobbiton guided tour|跟随向导而非航拍空镜，需环视或回访。
+侏罗纪拍摄地导览|Jurassic Park filming location tour|明确可识别场景，核对客户清单。
+星战实景取景地步行|Star Wars filming location walk|实拍人物穿行与回访，不是游戏关卡。
+影视城场景步行|movie set guided walkthrough|主持或向导持续可见，非多个布景剪辑。
+经典走廊影视长镜头|movie corridor tracking shot|作品内空间探索，需识别场景并满足回访或环视。
+@T6.3|补充|豁免环视回访与地面视角，但仍需解释明确主体或驾驶视角。不是任意无人机风景都自动合格。
+无人机跟随徒步者|drone following hiker|明确跟随同一人物，空间路径连续。
+无人机跟随骑行者|drone following cyclist|主体持续在画面，空间探索是主看点而非速度。
+无人机跟随船只|drone following boat|同一船与路线关系清晰，画面有活性对象。
+无人机跟随越野车|drone following off road vehicle|跟车探索地形，不能只是空镜切换。
+穿越机连续穿行建筑|FPV building fly through|无环视要求；机位人称及R11适用须人工确认。
+无人机跟随滑雪者|drone following skier|同一滑雪者与地形关系连续，避免高速失焦。
+@T6.4|难搜|开门只是起点，人物和镜头要穿门完成空间变化；仍需环视或二次回访。仅手开门应归T4.4。
+一镜到底房屋参观|house tour one take|跟随带看人穿门，返回同一空间或环视。
+酒店房间现场带看|hotel room walkthrough host|人物开门进入并引导移动，查是否中途剪辑。
+工作室参观|studio tour one take|从门外到门内空间切换，保留主体和回访。
+车间导览穿门|workshop guided walkthrough|向导穿门到另一工作区，环境关系连续。
+温室进出导览|greenhouse guided tour|开门到室内外切换完整，补查环视回访。
+剧场后台导览|backstage guided tour|人物开门进入新空间，不能剪接凑成路径。
+@T6.5|难搜|需身体位移、受限视线或明暗变化，还要环视或回访。恐怖/奇幻题材易出游戏录像与失焦黑场。
+玉米迷宫跟随|corn maze walkthrough|跟随同伴探索死路再返回，有真实回访。
+树篱迷宫探索|hedge maze walk|人物与转角连续可见，路线返回成立。
+鬼屋实拍同行|haunted house walkthrough live action|主体连续且暗部仍可辨，排除游戏和惊吓剪辑。
+镜子迷宫实录|mirror maze walkthrough|人物路径可读，反射不能造成主体识别混乱。
+沉浸式展览导览|immersive exhibition guided tour|跟随向导，环境有动态与明暗变化并含回访。
+主题乐园暗骑实录|dark ride POV|原文相关题材；常缺环视回访，找不到则不要硬收。
+@T6.6|先试|跟随人物走街道、公园或校园，同时保留环视或二次回访。普通无同伴步行片多为第一人称。
+校园向导步行|campus tour student guide|跟随学生向导移动，回到同一地标或环视。
+公园步行带路|park guided walk|人物始终可见，路线有回访而非只直走。
+街区实地导览|neighborhood guided walk|跟随向导过街与人行道切换，查连续性。
+步行返回起点|walking loop follow cam|外部跟随同一人物，自然返回可辨位置。
+植物园人物导览|botanical garden guided tour|人和背景都清楚，有活性对象与环视回访。
+山村街道同行|village walk with guide|人物移动和环境关系清楚，不是风景幻灯片。
+@T6.7|先试|第三人称跟随带看人，优先可回到同一房间的路线；俯拍房产无人机和无人空镜不等于人物探索。
+办公室现场导览|office tour one take|跟随讲解者走动，环视或回到工作区。
+工坊现场参观|workshop tour one take|人物穿行多个位置后回访，原声与背景清楚。
+画室带看|artist studio walkthrough|艺术家本人持续可见，不是作品特写拼接。
+酒店走廊带路|hotel guided walkthrough|跟随人物行走转身，保留空间参照物。
+家庭室内参观|home tour one take|带看人身体可见并有环视回访，不选快剪装潢展示。
+博物馆室内导览|museum guided walkthrough|跟随向导，展区关系连续，避免纯静态展品。
+@T6.8|先试|豁免环视回访与R13；主体上下位移要完整。第三人称需看见人物，不能拿纯电梯内壁补配额。
+人物上楼跟拍|walking upstairs follow cam|从接近台阶到上楼站稳连续，主体全程可见。
+人物下楼跟拍|walking downstairs tracking shot|下楼过程完整，避免只拍脚。
+跟随人物上扶梯|following person escalator|踏入、上升、走出完整。
+电梯进出同行|entering elevator follow cam|人物入梯、空间位移线索与出梯连续可读。
+沿坡道上行|walking up ramp follow cam|人物与坡度关系可见，不是地面近摄。
+旋转楼梯跟随|spiral staircase follow cam|同一人物上下移动，画面平稳无变焦。
+@T6.9|难搜|强制第三人称；人物站定或慢走时扫视，镜头也要交代空间，不能用纯POV转头替代。仍查环视或回访。
+角色进入大厅环顾|character looking around hall scene|人物身体可见，环顾与空间展示连续。
+向导环视展厅|guide looking around room|人物与空间同框，非固定对脸讲解。
+探险者查看房间|explorer looking around room|跟随探险者慢走扫视，实拍且回访或环视完整。
+人物走入庭院环顾|person entering courtyard looking around|主体不丢失，环境有活性物体。
+过肩观察周围|over shoulder looking around scene|可见人物肩背和前方空间，不是主观空镜。
+人物环绕房间长镜头|person walking around room one take|人物扫视与完整空间连续，不靠切镜构造。
+@T7.1|先试|主看点是留痕过程，施力者或载具与痕迹同时可见；普通书写偏T4.2，留痕物理过程突出才归这里。
+雪地行走留脚印|walking in fresh snow|跟随完整人物，脚印随脚步连续形成。
+沙滩拖棍画线|drawing in sand with stick|人或操作手、工具、轨迹同时可见。
+粉笔地面作画|sidewalk chalk drawing real time|接触到痕迹形成，排除延时与顶拍无主体。
+滚轮涂墙|painting wall roller real time|操作者推动滚筒并形成涂层，非结果特写。
+泥地车辆轮印|vehicle tracks in mud|车体及轮印形成同框，非只有车辙近摄。
+雪地滑行留轨迹|ski tracks fresh snow ground view|人物与痕迹连续，地面视角及原速。
+@T7.2|先试|看一次碰撞或位移的物理后果，同时看谁施力；多节点连续传递优先查T5.5。无需用physics等抽象词搜。
+保龄球完整投球|bowling full shot|投球者、球运动与碰瓶结果同一镜头。
+台球开球|pool break shot|球杆施力者与球散开完整，避免纯台面俯拍。
+冰壶投掷|curling delivery|投掷者、冰壶滑行与停止或碰撞可见。
+法式滚球投掷|petanque throw|人投球到球着地及碰撞连续。
+投沙包入板|cornhole throw|抛掷者与落点同框，保留完整抛物过程。
+推箱子滑动|pushing heavy box|施力者、物体位移和停止可见，非单纯搬家记录。
+@T7.3|先试|看施力主体或明确受力过程，形变破坏是主看点。金属锻打等易搜但常有慢放、火花特写和音乐覆盖。
+锻工手锤锻打|blacksmith hand forging|锻工与锤击导致金属形变同框，实时连续。
+劈柴|splitting firewood|举斧、接触、木头裂开完整，不能只拍飞溅碎片。
+陶艺拉坯|pottery wheel throwing real time|操作者双手与泥坯形变同时可见，非延时。
+手工弯管|manual pipe bending|人施力与管材弯曲连续。
+撕纸|tearing paper real time|手、受力与裂口传播可见，至少5秒完整动作链。
+挖掘机拆墙|excavator demolition wall|机械主体和墙体受力破碎同框，地面视角。
+揉捏黏土|clay kneading real time|操作者与材料形变，物理形变比制作成品更突出。
+弹性垫受压回弹|jumping on trampoline ground view|人体施力和垫面变形回弹同时可见。
+@T7.4|补充|本单元无需人为主体，可锚定水流或火焰本身；自发现象必须有清晰变化，排除纯装饰循环、模拟与延时。
+雨水冲走泥沙|rain washing away sand|锚定水流与泥沙迁移，能看见清洁过程。
+海浪冲刷沙堆|wave washing sandcastle|水冲到沙体并侵蚀的因果过程清楚。
+水流绕石形成涡旋|stream flowing around rock|锚定具体水流结构，变化可辨而非风景空镜。
+树脂自然滴落|tree sap dripping|滴落、拉丝或累积连续，背景清晰且有原声。
+熔岩缓慢流动|lava flow real time|锚定熔岩前沿与流动，非延时或CG模拟。
+火焰沿可燃物传播|flame spreading real time footage|从燃烧到传播可读，选择合规安全记录。
+@T7.5|先试|崎岖地形、姿态调整和受力是主看点；必须看到全身或载具全貌，不能只有脚、轮胎和地面。
+吉普攀爬岩石|jeep rock crawling|整车与轮胎贴合岩石及车身起伏同框。
+越野卡车交叉轴|truck articulation obstacle|全车越障与悬挂变化可读，非零件特写。
+山羊攀岩|goat climbing rocks|全身在崎岖表面调整姿态，连续跟随。
+徒步者跨岩石|hiker scrambling rocks|人物全身、支撑点与重心调整清楚。
+自行车下台阶|bike riding down stairs|全车及骑手随地形起伏，避免剪辑炫技。
+马匹走崎岖山路|horse rocky trail|动物全身与落蹄地形同时可辨。
+@T7.6|先试|施力主体与入水出水、飞溅或水面破开同时可见；单纯水纹不能用。第一人称踩水坑是原文认可方向。
+雨靴踩水坑|splashing puddles POV|脚接近、入水、水花与撤离完整。
+吉普涉水|jeep water crossing|整车、入水和水花连续，非轮胎特写。
+骑马过溪|horse crossing stream|马和骑手持续可见，踏水反馈明确。
+狗跳入水|dog jumping into water|起跳到入水溅射完整，跟着狗而非只拍落点。
+皮划艇入水|kayak launching into water|人艇与水面破开同时可见。
+潜水员出水|diver surfacing|主体由水下到水面出现，保留界面变化。
+@T7.7|补充|物理失重或水阻是主看点，不是一般水下风景；宇航员用真实航天记录或符合规则的实拍合成，不能用游戏或纯CG。
+空间站宇航员漂浮|astronaut floating ISS|身体漂浮和姿态变化清楚，排除解说字幕与固定监控。
+抛物线飞行失重|zero gravity flight floating|真实人物漂浮、推动或转身，主体连续。
+潜水员中性浮力|scuba neutral buoyancy|人物稳定漂浮与姿态调节可读。
+自由潜水缓慢上浮|freediver floating upward|浮力与身体运动是主看点，非普通游泳集锦。
+水下转身翻滚|diver underwater somersault|完整人物与水阻下姿态变化，保持原速。
+水下生物游动|sea turtle swimming underwater|跟随同一生物，突出浮游与水中运动，非静止动物照。
+@T7.8|先试|操作手或人持续可见，突出铰链、滑动、旋转、绳索等约束；普通开关门主看动作时归T4.4。
+手摇绞盘拉物|manual winch pulling|人摇柄、绳索受力及被拉物移动同框。
+滑轮提升重物|pulley lifting load demonstration|操作者、绳索和负载完整，非仅机械模型特写。
+手动旋转阀门|turning valve wheel|手转动与阀门受约束运动清楚。
+木榫装配|mortise tenon assembly|人手推动构件插接，连接约束可辨。
+自行车车轮安装|bicycle wheel installation|操作者和构件对位锁紧连续。
+铰链折叠装置|folding mechanism demonstration|手操纵，铰接运动范围与结果可见。
+@T8.1|补充|按作品找电影级跟踪单镜头，必须备注片名；名场面不一定满足背景清晰、无黑边和原生2K。
+战争片跟随长镜头|1917 tracking shot scene|挑跟随人物连续段，核对发行画幅与原声。
+犯罪片穿行长镜头|Goodfellas tracking shot scene|人物空间移动和构图表现突出，别用解说分析视频。
+城市危机人物跟拍|Children of Men long take scene|选实拍人物连续运动段，核对画质与切镜。
+动作片走廊跟拍|movie hallway tracking shot|主体与摄影表现兼具，非普通监控走廊。
+人物穿过人群长镜头|movie crowd tracking shot|人物持续可见，层次与调度突出。
+影视楼梯跟随镜头|movie staircase long take|构图和运动平滑，动作完整无切镜。
+@T8.2|难搜|原文允许航拍但与R13豁免列表冲突，优先地面电影级运镜并保留主体；航拍方向待确认，不默认放行。光照覆盖看整批。
+埃菲尔铁塔人物轨道跟拍|Eiffel Tower cinematic tracking shot|地标和人物同框，地面移动而非变焦。
+罗马地标稳定器跟拍|Rome cinematic gimbal walk|跟随人物，地标辨识与光影表现均突出。
+长城人物电影级跟拍|Great Wall cinematic tracking shot|地面主体可辨，不是航拍空镜集锦。
+金门大桥人物日落跟拍|Golden Gate Bridge cinematic walk|主体与地标共存，暮色不压黑。
+伦敦地标清晨跟拍|London landmark tracking shot|电影级平滑移动，备注具体地标与时段。
+悉尼海港人物轨道拍摄|Sydney Opera House tracking shot|人物、地标与活跃环境构成连续画面。
+@T8.3|补充|找专业纪录片实际追踪镜头；频道或标题写BBC不保证分辨率。镜头跟主体，排除笼舍、采访和静止对谈。
+企鹅行走追踪|penguin walking BBC Earth|挑跟随同一企鹅的连续段，核对台标及高清源。
+狐狸狩猎追踪|fox hunting documentary|主体持续可见，避开慢动作和频繁切镜。
+猎豹奔跑追踪|cheetah running documentary|高速运动清楚且原速，主体不丢失。
+海獭游动追踪|sea otter swimming documentary|相机跟随同一动物，水面和背景清晰。
+手艺人工作跟拍|craftsman documentary tracking shot|电影级相机追踪人物，非采访或纯手部特写。
+牧民行走纪录片|herder documentary tracking shot|人物持续移动与环境关系清楚，原声可闻。
+@T8.4|补充|唯一允许刻意慢速摄影的单元；仍需主体、平滑运镜与高级摄影技法。逆光可轮廓清楚，但背景虚化并未豁免。
+逆光舞者跟拍|backlit dancer tracking shot|舞者轮廓动作可辨，背景仍清楚，原声不被覆盖。
+晨雾跑者跟拍|runner mist cinematic tracking shot|平滑跟拍与光影层次突出，非随手记录慢放。
+夕阳骑手跟拍|horse rider sunset tracking shot|骑手轮廓、环境与光影清晰，不选航拍俯视。
+雨中人物慢动作摄影|rain walking slow motion cinematic|刻意摄影且主体完整，不能后期插帧凑慢动作。
+逆光滑板连续镜头|skateboard backlight tracking shot|技巧、光影和连续跟拍兼具，无品牌标志。
+侧光人物稳定器长镜头|cinematic gimbal long take person|摄影技法可解释，非测试设备讲解片。
+@T9.1|补充|全电脑生成的角色表演，柔和光照与电影化运动；不是实拍桶，也不能用游戏过场。按原作帧率。
+三维角色追逐短片|3D animated chase short film|角色连续动作与电影机位，排除游戏。
+三维动物冒险短片|3D animated animal short film|动物角色持续表演，非静态模型转台。
+三维烹饪故事短片|3D animated cooking short film|角色与物体交互完整，非产品渲染。
+三维机器人故事短片|3D animated robot short film|角色表演与空间运动，排除实时游戏演示。
+三维双人喜剧短片|3D animated comedy short film|双方行动与回应连续，无穿模。
+三维舞蹈叙事短片|3D animated dance short film|不是动作库预览，具有完整场景与电影机位。
+@T9.2|补充|真正手绘逐帧角色动作，背景精度高；不把静图平移或滤镜实拍当动画，不用插帧补流畅度。
+手绘奔跑短片|hand drawn running animation short film|角色步态逐帧变化，非循环GIF拼接。
+二维追逐动画|2D animated chase short film|角色持续运动，单镜头段可提取。
+手绘烹饪故事|hand drawn cooking animation|手绘角色实际操作，不是静态食物插画。
+二维雨中行走|2D animation walking in rain|人物与雨水真实逐帧运动，非静图加雨层。
+手绘动物冒险|hand drawn animal short film|可辨角色与精细背景，非游戏录制。
+赛璐珞风角色表演|cel animation short film|背景和角色分层、逐帧感明确，不选混剪MV。
+@T9.3|补充|逐格实物拍摄且有手工材质，角色发生表演；不能把延时、木偶连续录像或产品旋转展示当定格。
+黏土角色做饭|claymation cooking short film|角色逐格操作，接缝与手工痕迹可见。
+黏土人物追逐|claymation chase|连续动作段至少5秒，非制作教程。
+定格小动物故事|stop motion animal short film|实物材质与动作顿挫感，非CG冒充。
+木偶定格角色行走|puppet stop motion short film|逐帧拍摄而非提线木偶连续表演。
+织物角色定格故事|felt stop motion short film|纤维质感可辨，角色实际动作。
+阿德曼角色短片|Aardman short film|找官方完整故事内的连续片段，不是片头合辑。
+@T9.4|难搜|颜料笔触或水彩晕染可见，动作来自逐帧重绘；不是拍人画画、静态名画推拉或实拍加滤镜。
+油画角色故事|paint on glass animation short film|角色逐帧移动，玻璃上绘画质感真实可见。
+水彩动物动画|watercolor animal animation short film|动物动作重绘驱动，边缘有水彩晕染。
+油画人物行走|oil painting animation walking|人物连续动作，非原画平移缩放。
+水彩人物旅行短片|watercolor animated short film journey|人物与背景持续运动，不是幻灯片。
+梵高风绘画动画|Loving Vincent scene|定位绘画动画片段，排除解析、预告拼剪与版权不明转载。
+颜料逐帧舞蹈动画|painted animation dance short film|人体动作由重绘形成，不是滤镜舞蹈实拍。
+@T9.5|补充|像素或横版卷轴的独立动画，不收任何游戏录制与过场。即使没有HUD，也不能凭外观把游戏当动画。
+像素角色故事|pixel art animated short film|独立叙事动画，像素边界清晰无抗锯齿。
+像素追逐短片|pixel animation chase short film|角色追逐连续，核实来源不是游戏。
+像素人物行走故事|pixel art walking short film|避免只循环精灵动作或静态壁纸。
+横版角色冒险动画|side scrolling animated short film|原创动画段落，非横版游戏通关。
+像素城市人物动画|pixel art city character animation|角色活动明确，不是只有霓虹闪烁背景。
+像素动物冒险故事|pixel art animal short film|连续角色表演，非素材包预览或游戏录像。

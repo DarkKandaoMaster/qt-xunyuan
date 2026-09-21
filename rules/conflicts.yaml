@@ -9,7 +9,9 @@
       "type": "unit_scope",
       "listed_but_missing_detail": ["T3.6", "T4.5", "T4.6", "T8.5"],
       "detailed_but_missing_from_list": ["T5.6", "T5.7", "T7.6", "T7.7", "T7.8", "T9.5"],
-      "temporary_policy": "按第四章详细规则录入；超出第五章范围的单元 requires_confirmation=true。仅在第五章出现但无详细规则的单元不可使用。",
+      "resolved": true,
+      "resolution": "用户确认以第四章详细规则为准，T5.6、T5.7、T7.6、T7.7、T7.8、T9.5 均允许正常交付。无详细规则的单元仍不可使用。",
+      "temporary_policy": "第四章有详细规则的单元允许正常交付。",
       "automatic_decision": false
     },
     {
@@ -32,4 +34,3 @@
     }
   ]
 }
-

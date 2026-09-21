@@ -187,6 +187,11 @@ $('#close-drawer').onclick = () => $('#drawer').classList.remove('open');
 
 async function decide(decision, confirmHard = false) {
   if (!current) return;
+  if (decision === 'ACCEPT' && !['first_person', 'third_person'].includes($('#viewpoint').value)) {
+    notice('请先选择第一人称或第三人称，再提交接受。', true);
+    $('#viewpoint').focus();
+    return;
+  }
   const payload = {decision, final_bucket: $('#bucket').value || null, final_unit: $('#unit').value || null,
     final_viewpoint: $('#viewpoint').value || null, notes: $('#notes').value,
     manual_rule_overrides: {}, confirm_hard_fail: confirmHard};

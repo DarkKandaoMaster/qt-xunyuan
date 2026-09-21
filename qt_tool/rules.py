@@ -39,6 +39,11 @@ class RuleEngine:
     def __init__(self, rules_path: Path, conflicts_path: Path):
         self.rules = _load_json_yaml(rules_path)
         self.conflicts = _load_json_yaml(conflicts_path)
+        for conflict in self.conflicts.get("conflicts", []):
+            if conflict.get("id") == "CONFLICT-001" and conflict.get("resolved"):
+                for unit in conflict.get("detailed_but_missing_from_list", []):
+                    if unit in self.rules["units"]:
+                        self.rules["units"][unit]["requires_confirmation"] = False
 
     @property
     def buckets(self) -> dict[str, Any]:
@@ -213,6 +218,8 @@ class RuleEngine:
         return RuleResult("T6_ORBIT", RuleStatus.FAIL, "T6 非豁免单元缺少环视/回访", {"unit": unit}, True)
 
     def _fps(self, facts: dict[str, Any], bucket: str | None) -> RuleResult:
+        if str(facts.get("source_type") or "").upper() == "PROXY":
+            return RuleResult("SPEC_FPS", RuleStatus.UNKNOWN, "代理帧率不用于淘汰，最终按原片帧率判定", {})
         fps = facts.get("fps")
         if not bucket or fps is None or float(fps) <= 0:
             return RuleResult("SPEC_FPS", RuleStatus.UNKNOWN, "缺少可靠帧率", {})
@@ -248,7 +255,7 @@ class RuleEngine:
             return RuleResult("UNIT", RuleStatus.CONFLICT, "该单元没有第四章详细规则，不可自动使用", {"unit": unit}, True)
         if data.get("requires_confirmation"):
             return RuleResult("UNIT", RuleStatus.CONFLICT, "该单元超出第五章列示范围，需确认后生产", {"unit": unit, "conflict_id": "CONFLICT-001"}, True)
-        return RuleResult("UNIT", RuleStatus.PASS, "单元在第四章与第五章范围内", {"unit": unit}, True)
+        return RuleResult("UNIT", RuleStatus.PASS, "单元有第四章详细规则，已在允许交付范围内", {"unit": unit}, True)
 
     @staticmethod
     def automatic_reject(results: list[RuleResult]) -> bool:
