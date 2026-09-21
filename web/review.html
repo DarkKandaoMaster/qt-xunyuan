@@ -6,7 +6,7 @@
   <main class="page"><div class="review-layout">
     <section class="card"><div class="video-wrap"><video id="video" controls preload="metadata"></video><div class="empty" id="video-empty">暂无待审核候选</div></div><div class="clip-meta"><span id="source-meta">—</span><span id="clip-time">—</span></div></section>
     <aside class="card">
-      <div class="section-head"><div><h2>候选判断</h2><p id="queue-meta">载入中…</p></div></div>
+      <div class="section-head"><div><h2 id="candidate-title">候选判断</h2><p id="queue-meta">载入中…</p></div></div>
       <div class="recommend"><div><label>桶</label><select id="bucket"></select></div><div><label>单元</label><select id="unit"></select></div><div><label>人称</label><select id="viewpoint"><option value="">待人工判断</option><option value="first_person">第一人称</option><option value="third_person">第三人称</option></select></div></div>
       <textarea id="notes" rows="2" placeholder="拒绝原因、if→then、物理反馈等备注"></textarea>
       <div class="rule-list" id="rules"><div class="empty">请选择候选</div></div>
@@ -18,4 +18,3 @@
   <aside class="drawer" id="drawer"><button class="secondary" id="close-drawer" style="float:right">关闭</button><h2 id="drawer-title">规则</h2><div id="drawer-body"></div></aside>
   <script src="/static/review.js"></script>
 </body></html>
-
