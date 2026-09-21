@@ -7,6 +7,7 @@ import math
 import re
 import shutil
 import subprocess
+import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,15 @@ def merge_facts(base_json: str, probe: dict[str, Any], **overrides: Any) -> dict
     facts.update(probe)
     facts.update(overrides)
     return facts
+
+
+def delivery_description(title: str, limit: int = 60) -> str:
+    """Return a Windows-safe short description while preserving Chinese text."""
+    value = unicodedata.normalize("NFKC", str(title or ""))
+    value = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", value)
+    value = re.sub(r"\s+", "_", value)
+    value = re.sub(r"_+", "_", value).strip(" ._")
+    return (value[:limit].rstrip(" ._") or "视频片段")
 
 
 def tool_status(settings: Settings) -> dict[str, bool]:
@@ -67,6 +77,40 @@ class MediaPipeline:
         self.settings = settings
         self.db = db
         self.rules = rules
+        if hasattr(self.db, "delivery_filename_rows"):
+            self.repair_delivery_filenames()
+
+    def repair_delivery_filenames(self) -> int:
+        """Rename legacy deliverables and update their persisted standard names."""
+        root = (self.settings.data_dir / "deliverable").resolve()
+        renamed = 0
+        for row in self.db.delivery_filename_rows():
+            unit = str(row.get("delivery_unit") or row.get("unit") or "UNSET")
+            sequence = int(row.get("delivery_sequence") or 0)
+            if sequence <= 0:
+                continue
+            stored_name = str(row.get("delivery_filename") or "")
+            compliant = re.fullmatch(rf"{re.escape(unit)}_{sequence:03d}_.+\.mp4", stored_name, re.IGNORECASE)
+            filename = stored_name if compliant else f"{unit}_{sequence:03d}_{delivery_description(row.get('source_title') or '')}.mp4"
+            old_path = Path(str(row.get("final_path") or ""))
+            final_path = old_path
+            if old_path.is_file():
+                resolved = old_path.resolve()
+                if root == resolved.parent or root in resolved.parents:
+                    target = old_path.with_name(filename)
+                    if target != old_path:
+                        if target.exists():
+                            raise FileExistsError(f"交付文件名冲突：{target}")
+                        shutil.copy2(old_path, target)
+                        if target.stat().st_size != old_path.stat().st_size:
+                            target.unlink(missing_ok=True)
+                            raise OSError(f"交付文件重命名校验失败：{old_path}")
+                        old_path.unlink()
+                        final_path = target
+                        renamed += 1
+            self.db.update_final_clip_delivery(int(row["candidate_id"]), str(final_path), filename,
+                                               str(row.get("deliverable_status") or "PENDING"))
+        return renamed
 
     def _ytdlp(self, *args: str, use_cookies: bool = False) -> list[str]:
         command = [self.settings.ytdlp_bin]
@@ -373,20 +417,25 @@ class MediaPipeline:
         conflicts = any(r.status == RuleStatus.CONFLICT for r in results)
         qa_status = "FAIL" if hard_fail else "CONFLICT" if conflicts else "PASS"
         self.db.save_rule_results(candidate_id, [r.to_dict() for r in results], stage="final")
+        qa_payload = {"rules": [r.to_dict() for r in results], "probe": info}
+        self.db.create_final_clip(candidate_id, original_path=candidate.get("original_path"), final_path=str(clip),
+                                  duration=info.get("duration"), width=info.get("width"), height=info.get("height"), fps=info.get("fps"),
+                                  has_audio=int(bool(info.get("has_audio"))), qa_status=qa_status,
+                                  deliverable_status="PENDING" if qa_status == "PASS" else "BLOCKED", qa=qa_payload)
         final_path = None
         if qa_status == "PASS":
             bucket = candidate.get("candidate_bucket") or "UNSET"
+            unit = candidate.get("candidate_unit") or "UNSET"
             bucket_name = self.rules.buckets.get(bucket, {}).get("name", "未分类")
             viewpoint = "第一人称" if candidate.get("candidate_viewpoint") == "first_person" else "第三人称"
             deliver_dir = self.settings.data_dir / "deliverable" / "QT寻源数据" / f"{bucket}_{bucket_name}" / viewpoint
             deliver_dir.mkdir(parents=True, exist_ok=True)
-            final_path = deliver_dir / clip.name
+            assignment = self.db.reserve_delivery_filename(
+                candidate_id, unit, delivery_description(candidate.get("source_title") or "")
+            )
+            final_path = deliver_dir / assignment["filename"]
             shutil.copy2(clip, final_path)
-        self.db.create_final_clip(candidate_id, original_path=candidate.get("original_path"), final_path=str(final_path) if final_path else str(clip),
-                                  duration=info.get("duration"), width=info.get("width"), height=info.get("height"), fps=info.get("fps"),
-                                  has_audio=int(bool(info.get("has_audio"))), qa_status=qa_status,
-                                  deliverable_status="READY" if qa_status == "PASS" else "BLOCKED",
-                                  qa={"rules": [r.to_dict() for r in results], "probe": info})
+            self.db.update_final_clip_delivery(candidate_id, str(final_path), assignment["filename"], "READY")
         if qa_status == "PASS":
             self.db.update_source(int(candidate["source_id"]), status="DELIVERABLE")
             with self.db.connect() as con:

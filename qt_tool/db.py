@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -125,8 +126,16 @@ CREATE TABLE IF NOT EXISTS final_clips (
   qa_status TEXT NOT NULL DEFAULT 'PENDING',
   deliverable_status TEXT NOT NULL DEFAULT 'PENDING',
   exported_at TEXT,
+  delivery_unit TEXT,
+  delivery_sequence INTEGER,
+  delivery_filename TEXT,
   qa_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS delivery_sequences (
+  unit TEXT PRIMARY KEY,
+  last_sequence INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS traffic_stats (
@@ -179,7 +188,74 @@ class Database:
             final_columns = {row[1] for row in con.execute("PRAGMA table_info(final_clips)")}
             if "exported_at" not in final_columns:
                 con.execute("ALTER TABLE final_clips ADD COLUMN exported_at TEXT")
+            if "delivery_unit" not in final_columns:
+                con.execute("ALTER TABLE final_clips ADD COLUMN delivery_unit TEXT")
+            if "delivery_sequence" not in final_columns:
+                con.execute("ALTER TABLE final_clips ADD COLUMN delivery_sequence INTEGER")
+            if "delivery_filename" not in final_columns:
+                con.execute("ALTER TABLE final_clips ADD COLUMN delivery_filename TEXT")
+            con.execute("""CREATE TABLE IF NOT EXISTS delivery_sequences (
+                           unit TEXT PRIMARY KEY,
+                           last_sequence INTEGER NOT NULL
+                           )""")
+            self._migrate_delivery_numbering(con)
+            con.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_final_delivery_sequence
+                           ON final_clips(delivery_unit,delivery_sequence)
+                           WHERE delivery_unit IS NOT NULL AND delivery_sequence IS NOT NULL""")
             self._migrate_proxy_r9_results(con)
+
+    @staticmethod
+    def _migrate_delivery_numbering(con: sqlite3.Connection) -> None:
+        """Assign stable per-unit sequence numbers to legacy delivered clips."""
+        rows = con.execute("""SELECT f.id,f.final_path,f.delivery_unit,f.delivery_sequence,f.delivery_filename,
+                               c.candidate_unit unit
+                               FROM final_clips f JOIN candidate_shots c ON c.id=f.candidate_id
+                               WHERE f.qa_status='PASS' AND COALESCE(c.candidate_unit,'')<>''
+                               ORDER BY f.created_at,f.id""").fetchall()
+        used: dict[str, set[int]] = {}
+        unassigned: list[sqlite3.Row] = []
+
+        # Preserve only assignments already stored by the new numbering system,
+        # or filenames that already match UNIT_001_description.mp4.
+        for row in rows:
+            unit = str(row["delivery_unit"] or row["unit"])
+            sequence = int(row["delivery_sequence"] or 0)
+            filename = str(row["delivery_filename"] or "")
+            if not filename and row["final_path"]:
+                filename = Path(str(row["final_path"])).name
+            compliant = re.fullmatch(rf"{re.escape(unit)}_(\d{{3,}})_.+\.mp4", filename, re.IGNORECASE)
+            if sequence <= 0 and compliant:
+                sequence = int(compliant.group(1))
+            if sequence > 0 and sequence not in used.setdefault(unit, set()):
+                used[unit].add(sequence)
+                con.execute("""UPDATE final_clips
+                               SET delivery_unit=?,delivery_sequence=?,delivery_filename=?
+                               WHERE id=?""", (unit, sequence, filename if compliant else "", row["id"]))
+            else:
+                unassigned.append(row)
+
+        last_by_unit = {
+            str(row["unit"]): int(row["last_sequence"])
+            for row in con.execute("SELECT unit,last_sequence FROM delivery_sequences")
+        }
+        for unit, sequences in used.items():
+            last_by_unit[unit] = max(last_by_unit.get(unit, 0), max(sequences, default=0))
+
+        for row in unassigned:
+            unit = str(row["unit"])
+            sequence = last_by_unit.get(unit, 0) + 1
+            while sequence in used.setdefault(unit, set()):
+                sequence += 1
+            used[unit].add(sequence)
+            last_by_unit[unit] = sequence
+            con.execute("""UPDATE final_clips
+                           SET delivery_unit=?,delivery_sequence=?,delivery_filename=''
+                           WHERE id=?""", (unit, sequence, row["id"]))
+
+        for unit, sequence in last_by_unit.items():
+            con.execute("""INSERT INTO delivery_sequences(unit,last_sequence) VALUES(?,?)
+                           ON CONFLICT(unit) DO UPDATE SET last_sequence=MAX(last_sequence,excluded.last_sequence)""",
+                        (unit, sequence))
 
     @staticmethod
     def _migrate_proxy_r9_results(con: sqlite3.Connection) -> None:
@@ -477,6 +553,51 @@ class Database:
                                fields.get("deliverable_status", "PENDING"), json.dumps(fields.get("qa", {}), ensure_ascii=False), now()))
             return int(cur.fetchone()[0])
 
+    def reserve_delivery_filename(self, candidate_id: int, unit: str, description: str) -> dict[str, Any]:
+        """Reserve and persist the next per-unit delivery number for a candidate."""
+        description = description.strip(" ._") or "视频片段"
+        with self.connect() as con:
+            row = con.execute("""SELECT delivery_unit,delivery_sequence,delivery_filename
+                                 FROM final_clips WHERE candidate_id=?""", (candidate_id,)).fetchone()
+            if not row:
+                raise ValueError("最终片段记录不存在，无法分配交付序号")
+            existing_unit = str(row["delivery_unit"] or "")
+            existing_sequence = int(row["delivery_sequence"] or 0)
+            existing_filename = str(row["delivery_filename"] or "")
+            if existing_unit == unit and existing_sequence > 0:
+                filename = existing_filename or f"{unit}_{existing_sequence:03d}_{description}.mp4"
+                if not existing_filename:
+                    con.execute("UPDATE final_clips SET delivery_filename=? WHERE candidate_id=?",
+                                (filename, candidate_id))
+                return {"unit": unit, "sequence": existing_sequence, "filename": filename}
+
+            sequence = int(con.execute("""INSERT INTO delivery_sequences(unit,last_sequence) VALUES(?,1)
+                                          ON CONFLICT(unit) DO UPDATE SET last_sequence=last_sequence+1
+                                          RETURNING last_sequence""", (unit,)).fetchone()[0])
+            filename = f"{unit}_{sequence:03d}_{description}.mp4"
+            con.execute("""UPDATE final_clips
+                           SET delivery_unit=?,delivery_sequence=?,delivery_filename=?
+                           WHERE candidate_id=?""", (unit, sequence, filename, candidate_id))
+            return {"unit": unit, "sequence": sequence, "filename": filename}
+
+    def update_final_clip_delivery(self, candidate_id: int, final_path: str, filename: str,
+                                   deliverable_status: str = "READY") -> None:
+        with self.connect() as con:
+            con.execute("""UPDATE final_clips
+                           SET final_path=?,delivery_filename=?,deliverable_status=?
+                           WHERE candidate_id=?""", (final_path, filename, deliverable_status, candidate_id))
+
+    def delivery_filename_rows(self) -> list[dict[str, Any]]:
+        with self.connect() as con:
+            rows = con.execute("""SELECT f.candidate_id,f.final_path,f.delivery_unit,f.delivery_sequence,
+                                  f.delivery_filename,f.deliverable_status,c.candidate_unit unit,s.title source_title
+                                  FROM final_clips f
+                                  JOIN candidate_shots c ON c.id=f.candidate_id
+                                  JOIN sources s ON s.id=c.source_id
+                                  WHERE f.qa_status='PASS' AND f.delivery_sequence IS NOT NULL
+                                  ORDER BY f.delivery_unit,f.delivery_sequence""").fetchall()
+            return [dict(row) for row in rows]
+
     def mark_delivery_exported(self, candidate_ids: list[int], exported_at: str | None = None) -> None:
         if not candidate_ids:
             return
@@ -498,7 +619,8 @@ class Database:
             rows = con.execute("""SELECT c.id candidate_id,c.candidate_bucket bucket,c.candidate_unit unit,
                 c.candidate_viewpoint viewpoint,c.start_time,c.end_time,c.duration candidate_duration,c.duration_bucket,
                 s.url source_url,s.platform,s.video_id,s.title source_title,
-                f.final_path,f.duration,f.width,f.height,f.fps,f.has_audio,f.qa_status,f.deliverable_status,
+                f.final_path,f.delivery_unit,f.delivery_sequence,f.delivery_filename,
+                f.duration,f.width,f.height,f.fps,f.has_audio,f.qa_status,f.deliverable_status,
                 f.created_at,f.exported_at,
                 (SELECT notes FROM reviews r WHERE r.candidate_id=c.id ORDER BY r.id DESC LIMIT 1) notes
                 FROM final_clips f JOIN candidate_shots c ON c.id=f.candidate_id JOIN sources s ON s.id=c.source_id

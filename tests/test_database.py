@@ -132,6 +132,38 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual([row["id"] for row in db.list_final_candidates("pending")], [candidate_id])
             self.assertEqual(db.list_final_candidates("processed"), [])
 
+    def test_delivery_sequence_is_persistent_per_unit_and_reused_on_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "test.sqlite3"
+            db = Database(path)
+            source_id, _ = db.add_source(
+                {"platform": "youtube", "video_id": "numbering", "url": "https://example.test/v", "title": "城市跑步跟拍"}
+            )
+
+            def add_final(unit: str, start: float) -> int:
+                candidate_id, _ = db.add_candidate({"source_id": source_id, "start_time": start,
+                                                     "end_time": start + 10, "duration": 10,
+                                                     "candidate_unit": unit, "facts": {}})
+                db.create_final_clip(candidate_id, qa_status="PASS", deliverable_status="PENDING")
+                return candidate_id
+
+            first = add_final("T1.1", 0)
+            second = add_final("T1.1", 10)
+            other_unit = add_final("T6.3", 20)
+            self.assertEqual(db.reserve_delivery_filename(first, "T1.1", "城市跑步跟拍")["filename"],
+                             "T1.1_001_城市跑步跟拍.mp4")
+            self.assertEqual(db.reserve_delivery_filename(second, "T1.1", "城市跑步跟拍")["filename"],
+                             "T1.1_002_城市跑步跟拍.mp4")
+            self.assertEqual(db.reserve_delivery_filename(other_unit, "T6.3", "城市跑步跟拍")["filename"],
+                             "T6.3_001_城市跑步跟拍.mp4")
+
+            reopened = Database(path)
+            self.assertEqual(reopened.reserve_delivery_filename(first, "T1.1", "另一个标题")["filename"],
+                             "T1.1_001_城市跑步跟拍.mp4")
+            third = add_final("T1.1", 30)
+            self.assertEqual(reopened.reserve_delivery_filename(third, "T1.1", "新片段")["filename"],
+                             "T1.1_003_新片段.mp4")
+
 
 if __name__ == "__main__":
     unittest.main()

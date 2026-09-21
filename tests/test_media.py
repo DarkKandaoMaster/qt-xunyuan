@@ -6,10 +6,14 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from qt_tool.media import MediaPipeline, merge_facts
+from qt_tool.db import Database
+from qt_tool.media import MediaPipeline, delivery_description, merge_facts
 
 
 class MediaTests(unittest.TestCase):
+    def test_delivery_description_preserves_chinese_and_sanitizes_title(self):
+        self.assertEqual(delivery_description('  城市跑步 / 跟拍: 4K  '), "城市跑步_跟拍_4K")
+
     def test_final_probe_values_override_candidate_facts_without_duplicate_keys(self):
         facts = merge_facts('{"duration": 12, "width": 854}',
                             {"duration": 60.074, "width": 3840, "height": 2160},
@@ -54,6 +58,29 @@ class MediaTests(unittest.TestCase):
         self.assertEqual(exported[0]["分辨率"], "3840x2160")
         self.assertEqual(exported[0]["时长"], "12.346")
         self.assertEqual(DeliveryDB.exported_ids, [42])
+
+    def test_pipeline_repairs_legacy_delivery_filename(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            db_path = data_dir / "test.sqlite3"
+            db = Database(db_path)
+            source_id, _ = db.add_source({"platform": "youtube", "video_id": "legacy",
+                                          "url": "https://example.test/v", "title": "城市跑步跟拍"})
+            candidate_id, _ = db.add_candidate({"source_id": source_id, "start_time": 0.0, "end_time": 10.0,
+                                                 "duration": 10.0, "candidate_unit": "T1.1", "facts": {}})
+            deliver_dir = data_dir / "deliverable" / "QT寻源数据" / "T1_高动态载具" / "第三人称"
+            deliver_dir.mkdir(parents=True)
+            legacy_path = deliver_dir / "unknown_legacy-1.mp4"
+            legacy_path.write_bytes(b"video")
+            db.create_final_clip(candidate_id, final_path=str(legacy_path), qa_status="PASS",
+                                 deliverable_status="READY")
+
+            migrated = Database(db_path)
+            MediaPipeline(SimpleNamespace(data_dir=data_dir), migrated, None)
+            expected = deliver_dir / "T1.1_001_城市跑步跟拍.mp4"
+            self.assertTrue(expected.is_file())
+            self.assertFalse(legacy_path.exists())
+            self.assertEqual(migrated.delivery_rows()[0]["final_path"], str(expected))
 
 
 if __name__ == "__main__":
