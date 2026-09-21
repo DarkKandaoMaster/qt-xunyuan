@@ -7,11 +7,18 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from qt_tool.db import Database
-from qt_tool.media import MediaPipeline, delivery_description, merge_facts
+from qt_tool.media import MediaPipeline, delivery_description, merge_facts, ytdlp_error_message
 from qt_tool.subject import select_motion_valley, split_presence_samples
 
 
 class MediaTests(unittest.TestCase):
+    def test_ytdlp_errors_are_operator_friendly(self):
+        cookie = "ERROR: could not find firefox cookies database in C:/Profiles"
+        network = "HTTPSConnection: Failed to establish a new connection: [WinError 10013]"
+        self.assertIn("Firefox 登录信息", ytdlp_error_message(cookie, "代理下载"))
+        self.assertEqual(ytdlp_error_message(network, "搜索"),
+                         "搜索失败：无法连接 YouTube。请检查网络或代理设置后重试。")
+
     def test_motion_valley_prefers_quiet_point_before_action_rise(self):
         samples = [(0.1 * index, value) for index, value in enumerate(
             [24, 22, 20, 18, 16, 14, 14, 15, 18, 24, 30, 32, 29]

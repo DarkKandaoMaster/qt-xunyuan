@@ -31,6 +31,28 @@ def _run(args: list[str], timeout: int = 3600) -> subprocess.CompletedProcess[st
     return subprocess.run(args, text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=timeout, check=False)
 
 
+def ytdlp_error_message(stderr: str, action: str) -> str:
+    """Translate common yt-dlp failures into short operator-facing guidance."""
+    raw = str(stderr or "").strip()
+    lowered = raw.lower()
+    if "could not find" in lowered and "cookies database" in lowered:
+        return "无法读取 Firefox 登录信息。请用 Firefox 登录 YouTube、完全退出 Firefox 后重试；不要提供账号密码。"
+    if "sign in to confirm" in lowered or "not a bot" in lowered:
+        return "YouTube 要求登录确认。请确认 Firefox 已登录 YouTube 并完全退出浏览器，然后重试。"
+    network_markers = (
+        "failed to establish a new connection", "unable to download api page",
+        "network is unreachable", "name resolution", "winerror 10013",
+        "winerror 10060", "winerror 10061",
+    )
+    if any(marker in lowered for marker in network_markers):
+        return f"{action}失败：无法连接 YouTube。请检查网络或代理设置后重试。"
+    meaningful = [line.strip() for line in raw.splitlines() if line.strip().startswith("ERROR:")]
+    detail = meaningful[-1] if meaningful else raw
+    if not detail or detail.count("�") >= 3:
+        return f"{action}失败，请检查网络后重试；若仍失败，请查看工作台服务日志。"
+    return detail[-800:]
+
+
 def merge_facts(base_json: str, probe: dict[str, Any], **overrides: Any) -> dict[str, Any]:
     facts = dict(json.loads(base_json or "{}"))
     facts.update(probe)
@@ -139,7 +161,7 @@ class MediaPipeline:
         proc = _run(self._ytdlp("--dump-single-json", "--flat-playlist", "--skip-download",
                                 "--ignore-errors", "--no-warnings", target), timeout=300)
         if proc.returncode != 0:
-            raise RuntimeError(proc.stderr.strip() or "yt-dlp 搜索失败")
+            raise RuntimeError(ytdlp_error_message(proc.stderr, "搜索"))
         payload = json.loads(proc.stdout)
         self.db.add_traffic("metadata", len(proc.stdout.encode("utf-8")))
         entries = payload.get("entries") or []
@@ -208,8 +230,9 @@ class MediaPipeline:
         proc = _run(self._ytdlp("-f", fmt, "--merge-output-format", "mp4", "--no-playlist",
                                 "-o", str(output), source["url"], use_cookies=True), timeout=3600)
         if proc.returncode != 0:
-            self.db.update_source(source_id, status="ERROR", error=proc.stderr[-2000:])
-            raise RuntimeError(proc.stderr.strip() or "代理下载失败")
+            message = ytdlp_error_message(proc.stderr, "代理下载")
+            self.db.update_source(source_id, status="ERROR", error=message)
+            raise RuntimeError(message)
         path = self._find_download(output.parent, f"{source['platform']}_{source['video_id']}.*")
         info = self.probe(path)
         if not info.get("playable"):
@@ -231,8 +254,9 @@ class MediaPipeline:
                                 "--no-playlist", "-o", str(output), source["url"],
                                 use_cookies=True), timeout=7200)
         if proc.returncode != 0:
-            self.db.update_source(source_id, status="ERROR", error=proc.stderr[-2000:])
-            raise RuntimeError(proc.stderr.strip() or "最终源下载失败")
+            message = ytdlp_error_message(proc.stderr, "最终源下载")
+            self.db.update_source(source_id, status="ERROR", error=message)
+            raise RuntimeError(message)
         path = self._find_download(output.parent, f"{source['platform']}_{source['video_id']}.*")
         self.db.add_traffic("final", max(0, path.stat().st_size - before), source_id)
         self.db.update_source(source_id, status="FINAL_READY", original_path=str(path), error=None)
