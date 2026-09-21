@@ -8,9 +8,25 @@ from types import SimpleNamespace
 
 from qt_tool.db import Database
 from qt_tool.media import MediaPipeline, delivery_description, merge_facts
+from qt_tool.subject import split_presence_samples
 
 
 class MediaTests(unittest.TestCase):
+    def test_subject_loss_splits_instead_of_rejecting_whole_shot(self):
+        present = [index / 2 for index in range(0, 29)]
+        present += [19 + index / 2 for index in range(0, 16)]
+        segments, gaps = split_presence_samples(0.0, 26.62, present)
+        self.assertEqual(segments, ((0.0, 14.25), (19.0, 26.62)))
+        self.assertEqual(gaps, ({"start": 14.25, "end": 19.0, "duration": 4.75},))
+
+    def test_short_detector_dropout_does_not_split(self):
+        present = [index / 2 for index in range(0, 29)]
+        present += [18 + index / 2 for index in range(0, 3)]
+        present += [22 + index / 2 for index in range(0, 10)]
+        segments, gaps = split_presence_samples(0.0, 26.5, present)
+        self.assertEqual(segments, ((0.0, 26.5),))
+        self.assertEqual(gaps, ())
+
     def test_delivery_description_preserves_chinese_and_sanitizes_title(self):
         self.assertEqual(delivery_description('  城市跑步 / 跟拍: 4K  '), "城市跑步_跟拍_4K")
 

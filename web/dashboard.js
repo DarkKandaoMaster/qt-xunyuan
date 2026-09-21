@@ -138,7 +138,7 @@ async function loadQueues() {
   ]);
   $('#accepted').innerHTML = accepted.items.length ? accepted.items.map(candidate => {
     const finalized = candidate.qa_status === 'PASS';
-    const qa = candidate.qa_status && candidate.qa_status !== 'PASS' ? `<small><span class="badge fail">QA ${candidate.qa_status}</span></small>` : finalized ? '<small><span class="badge warn">已处理，等待导出</span></small>' : '';
+    const qa = candidate.qa_status === 'TRIM_REQUIRED' ? '<small><span class="badge warn">需按主体重新切分</span></small>' : candidate.qa_status && candidate.qa_status !== 'PASS' ? `<small><span class="badge fail">QA ${candidate.qa_status}</span></small>` : finalized ? '<small><span class="badge warn">已处理，等待导出</span></small>' : '';
     return `<tr><td>#${candidate.id}<small>${escapeHtml(candidate.source_title)}</small></td><td>${candidate.candidate_unit || '—'} · ${candidate.candidate_viewpoint === 'first_person' ? '第一人称' : candidate.candidate_viewpoint === 'third_person' ? '第三人称' : '待定'}</td><td>${Number(candidate.duration).toFixed(1)}s${qa}</td><td><button onclick="finalize(${candidate.id},this)">${finalized ? '重新处理' : '最终处理'}</button></td></tr>`;
   }).join('') : '<tr><td colspan="4" class="empty">暂无待最终处理候选</td></tr>';
   $('#processed').innerHTML = processed.items.length ? processed.items.map(candidate => `<tr><td>#${candidate.id}<small>${escapeHtml(candidate.source_title)}</small></td><td>${candidate.candidate_unit || '—'} · ${candidate.candidate_viewpoint === 'first_person' ? '第一人称' : '第三人称'}</td><td>${new Date(candidate.exported_at).toLocaleString('zh-CN')}</td><td><button class="secondary" onclick="restoreProcessed(${candidate.id},this)">移回最终处理</button></td></tr>`).join('') : '<tr><td colspan="4" class="empty">暂无已处理候选。</td></tr>';
@@ -148,7 +148,7 @@ async function loadQueues() {
   renderPagination('#rejected-pagination', 'rejected', rejected);
 }
 
-async function finalize(id, button) { button.disabled = true; notice('正在获取最终源、剪片并执行最终 QA；大文件可能需要较长时间…'); try { const data = await api(`/api/candidates/${id}/finalize`, {method: 'POST', body: '{}'}); notice(`最终 QA：${data.qa_status}${data.final_path ? '，已进入交付目录' : ''}`, data.qa_status !== 'PASS'); await Promise.all([loadQueues(), loadDashboard()]); } catch (error) { notice(error.message, true); button.disabled = false; } }
+async function finalize(id, button) { button.disabled = true; notice('正在获取最终源、剪片并执行最终 QA；大文件可能需要较长时间…'); try { const data = await api(`/api/candidates/${id}/finalize`, {method: 'POST', body: '{}'}); const trim = data.qa_status === 'TRIM_REQUIRED'; notice(trim ? '检测到主体持续离场：整条不判失败，请把来源移回候选列表后重新运行镜头分析。' : `最终 QA：${data.qa_status}${data.final_path ? '，已进入交付目录' : ''}`, data.qa_status !== 'PASS'); await Promise.all([loadQueues(), loadDashboard()]); } catch (error) { notice(error.message, true); button.disabled = false; } }
 async function restore(id, button) { button.disabled = true; try { await api(`/api/candidates/${id}/review`, {method: 'POST', body: JSON.stringify({decision: 'RESTORE', notes: '从拒绝列表恢复'})}); notice('已恢复到人工审核队列。'); await Promise.all([loadQueues(), loadDashboard()]); } catch (error) { notice(error.message, true); button.disabled = false; } }
 async function restoreProcessed(id, button) { button.disabled = true; try { await api(`/api/candidates/${id}/export-state`, {method: 'POST', body: JSON.stringify({processed: false})}); notice('已移回最终处理列表。'); await loadQueues(); } catch (error) { notice(error.message, true); button.disabled = false; } }
 

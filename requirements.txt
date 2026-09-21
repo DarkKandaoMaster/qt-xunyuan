@@ -1,7 +1,8 @@
-# The application core intentionally uses only Python's standard library.
+# The application core uses the standard library. Subject-aware T1.1 splitting
+# additionally uses OpenCV; install with `python -m pip install -r requirements.txt`.
+opencv-python-headless==4.12.0.88
 # Install these command-line tools separately for the production pipeline:
 #   ffmpeg / ffprobe
 #   yt-dlp
 # Optional, for higher quality shot detection:
 #   scenedetect[opencv]
-

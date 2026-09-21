@@ -79,7 +79,7 @@ class RuleEngine:
         results.append(self._r8(facts))
         results.append(self._r9(facts, bucket))
         results.append(self._r10(facts, unit))
-        results.extend(self._unknown("R11", "主体锚定需人工/视觉分析"))
+        results.append(self._r11(facts))
         results.extend(self._unknown("R12", "背景虚化属于低置信度视觉判断，不自动拒绝"))
         results.append(self._r13(facts, unit))
         results.extend(self._unknown("R14", "活性物体需人工/视觉分析"))
@@ -123,6 +123,27 @@ class RuleEngine:
         if silence_ratio >= 0.98:
             return RuleResult("R5", RuleStatus.FAIL, "音轨几乎全程静默", {"silence_ratio": silence_ratio}, True)
         return RuleResult("R5", RuleStatus.PASS, "存在音轨且未检测到全程静默", {"silence_ratio": silence_ratio}, True)
+
+    def _r11(self, facts: dict[str, Any]) -> RuleResult:
+        check = facts.get("subject_check")
+        evidence = {
+            "detector": facts.get("subject_detector"),
+            "split_applied": bool(facts.get("subject_split_applied")),
+            "loss_intervals": facts.get("subject_loss_intervals") or [],
+        }
+        if check == "PASS":
+            reason = "人物主体连续性检测通过"
+            if evidence["split_applied"]:
+                reason = "检测到主体持续离场，已按安全边界切分；当前候选仅保留主体可见区间"
+            # This is a useful visual pre-filter, but remains non-deterministic:
+            # the reviewer still confirms identity and semantic relevance.
+            return RuleResult("R11", RuleStatus.PASS, reason, evidence, False)
+        if check == "SKIPPED_SHOT_CHANGE":
+            return RuleResult("R11", RuleStatus.UNKNOWN, "R1 检出镜头切换，主体检测未执行", evidence, False)
+        if facts.get("subject_trim_required"):
+            return RuleResult("R11", RuleStatus.UNKNOWN,
+                              "检测到主体中途持续离场，需要重新切分；不判整条素材失败", evidence, False)
+        return RuleResult("R11", RuleStatus.UNKNOWN, "主体锚定仍需人工确认", evidence, False)
 
     def _r8(self, facts: dict[str, Any]) -> RuleResult:
         playable = facts.get("playable")

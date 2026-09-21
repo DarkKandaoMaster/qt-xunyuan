@@ -15,6 +15,7 @@ from typing import Any
 from .config import Settings
 from .db import Database
 from .rules import RuleEngine, RuleStatus
+from .subject import SubjectContinuityAnalyzer
 
 
 class ToolMissing(RuntimeError):
@@ -47,12 +48,14 @@ def delivery_description(title: str, limit: int = 60) -> str:
 
 
 def tool_status(settings: Settings) -> dict[str, bool]:
+    subject = SubjectContinuityAnalyzer(settings.root / "tools" / "models")
     return {
         "ffmpeg": _command_exists(settings.ffmpeg_bin),
         "ffprobe": _command_exists(settings.ffprobe_bin),
         "yt_dlp": _command_exists(settings.ytdlp_bin),
         "youtube_js": bool(settings.ytdlp_js_runtime),
         "youtube_auth": bool(settings.ytdlp_cookies_from_browser),
+        "subject_ai": subject.available,
     }
 
 
@@ -77,6 +80,8 @@ class MediaPipeline:
         self.settings = settings
         self.db = db
         self.rules = rules
+        root = getattr(settings, "root", settings.data_dir.parent)
+        self.subject_analyzer = SubjectContinuityAnalyzer(Path(root) / "tools" / "models")
         if hasattr(self.db, "delivery_filename_rows"):
             self.repair_delivery_filenames()
 
@@ -302,27 +307,32 @@ class MediaPipeline:
         # decisions and already-produced final clips are deliberately preserved.
         self.db.clear_replaceable_candidates(source_id)
         created_ids: list[int] = []
-        for start, end in shots:
-            duration = end - start
-            frame_hash = self.representative_frame_hash(path, start + duration / 2)
-            if frame_hash and self.db.candidate_hash_exists(frame_hash):
-                continue
-            duration_bucket, _, _ = self.rules.duration_bucket(duration)
-            facts = dict(info, duration=duration, shot_count=1, unit=unit, bucket=bucket,
-                         material_type=material_type, source_type="PROXY")
-            cid, created = self.db.add_candidate({"source_id": source_id, "start_time": start, "end_time": end,
-                "duration": duration, "proxy_path": str(path), "candidate_bucket": bucket, "candidate_unit": unit,
-                "material_type": material_type, "duration_bucket": duration_bucket, "score": source.get("source_score", 0),
-                "representative_hash": frame_hash, "facts": facts})
-            if created:
-                results = self.rules.evaluate(facts)
-                gate = self.rules.unit_gate(unit)
-                if gate:
-                    results.append(gate)
-                self.db.save_rule_results(cid, [r.to_dict() for r in results])
-                if self.rules.automatic_reject(results):
-                    self.db.review(cid, {"decision": "REJECT", "notes": "程序确定性硬规则自动淘汰"})
-                created_ids.append(cid)
+        for shot_start, shot_end in shots:
+            # Stage 1 is always the hard-cut detector. Only a single-shot range
+            # reaches stage 2, where sustained subject absence creates new
+            # reviewable slices instead of rejecting the whole source.
+            subject = self.subject_analyzer.analyze(path, shot_start, shot_end, unit)
+            for start, end in subject.segments:
+                duration = end - start
+                frame_hash = self.representative_frame_hash(path, start + duration / 2)
+                if frame_hash and self.db.candidate_hash_exists(frame_hash):
+                    continue
+                duration_bucket, _, _ = self.rules.duration_bucket(duration)
+                facts = dict(info, duration=duration, shot_count=1, unit=unit, bucket=bucket,
+                             material_type=material_type, source_type="PROXY", **subject.facts_for((start, end)))
+                cid, created = self.db.add_candidate({"source_id": source_id, "start_time": start, "end_time": end,
+                    "duration": duration, "proxy_path": str(path), "candidate_bucket": bucket, "candidate_unit": unit,
+                    "material_type": material_type, "duration_bucket": duration_bucket, "score": source.get("source_score", 0),
+                    "representative_hash": frame_hash, "facts": facts})
+                if created:
+                    results = self.rules.evaluate(facts)
+                    gate = self.rules.unit_gate(unit)
+                    if gate:
+                        results.append(gate)
+                    self.db.save_rule_results(cid, [r.to_dict() for r in results])
+                    if self.rules.automatic_reject(results):
+                        self.db.review(cid, {"decision": "REJECT", "notes": "程序确定性硬规则自动淘汰"})
+                    created_ids.append(cid)
         self.db.update_source(source_id, status="WAITING_REVIEW", analysis_completed=1, error=None)
         return created_ids
 
@@ -405,6 +415,19 @@ class MediaPipeline:
         info["black_ratio"] = self.black_ratio(clip, float(info.get("duration") or 0))
         detected = self.detect_shots(clip)
         info["shot_count"] = max(1, len(detected))
+        subject_trim_required = False
+        if info["shot_count"] == 1:
+            subject = self.subject_analyzer.analyze(
+                clip, 0.0, float(info.get("duration") or 0), candidate.get("candidate_unit")
+            )
+            info.update(subject.facts_for((0.0, float(info.get("duration") or 0))))
+            info["subject_proposed_segments"] = [list(segment) for segment in subject.segments]
+            subject_trim_required = subject.status == "SPLIT"
+            info["subject_trim_required"] = subject_trim_required
+            if subject_trim_required:
+                info["subject_check"] = "TRIM_REQUIRED"
+        else:
+            info.update({"subject_check": "SKIPPED_SHOT_CHANGE", "subject_trim_required": False})
         facts = merge_facts(candidate.get("facts_json") or "{}", info,
                             unit=candidate.get("candidate_unit"), bucket=candidate.get("candidate_bucket"),
                             material_type=candidate.get("material_type"), duration=info.get("duration"),
@@ -415,7 +438,7 @@ class MediaPipeline:
             results.append(gate)
         hard_fail = self.rules.automatic_reject(results)
         conflicts = any(r.status == RuleStatus.CONFLICT for r in results)
-        qa_status = "FAIL" if hard_fail else "CONFLICT" if conflicts else "PASS"
+        qa_status = "FAIL" if hard_fail else "TRIM_REQUIRED" if subject_trim_required else "CONFLICT" if conflicts else "PASS"
         self.db.save_rule_results(candidate_id, [r.to_dict() for r in results], stage="final")
         qa_payload = {"rules": [r.to_dict() for r in results], "probe": info}
         self.db.create_final_clip(candidate_id, original_path=candidate.get("original_path"), final_path=str(clip),

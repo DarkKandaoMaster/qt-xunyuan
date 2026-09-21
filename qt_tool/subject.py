@@ -1,0 +1,195 @@
+from __future__ import annotations
+
+import statistics
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+# The first production use-case is a clearly visible human athlete. Applying a
+# person detector to animals, vehicles, hands, or first-person footage would
+# create unsafe cuts, so expansion to other units must use a matching detector.
+SUPPORTED_PERSON_UNITS = frozenset({"T1.1"})
+
+
+@dataclass(frozen=True)
+class SubjectContinuity:
+    available: bool
+    reliable: bool
+    status: str
+    segments: tuple[tuple[float, float], ...]
+    gaps: tuple[dict[str, float], ...] = ()
+    evidence: dict[str, Any] | None = None
+
+    def facts_for(self, segment: tuple[float, float]) -> dict[str, Any]:
+        evidence = dict(self.evidence or {})
+        return {
+            "subject_check": "PASS" if self.reliable else "UNKNOWN",
+            "subject_detector": evidence.get("method"),
+            "subject_split_applied": self.status == "SPLIT",
+            "subject_segment_start": round(segment[0], 3),
+            "subject_segment_end": round(segment[1], 3),
+            "subject_loss_intervals": list(self.gaps),
+            "subject_detection_evidence": evidence,
+        }
+
+
+def split_presence_samples(
+    start: float,
+    end: float,
+    present_times: list[float],
+    *,
+    sample_interval: float = 0.5,
+    minimum_loss: float = 4.0,
+    minimum_segment: float = 5.0,
+) -> tuple[tuple[tuple[float, float], ...], tuple[dict[str, float], ...]]:
+    """Split only on sustained absence, retaining every independently useful side.
+
+    The boundary before a gap is placed half a sample after the last confirmed
+    subject frame. A resumed segment starts at the first frame where the subject
+    is confirmed again, preventing absent frames from leaking into the output.
+    """
+    times = sorted(t for t in present_times if start <= t <= end)
+    if not times:
+        return ((round(start, 3), round(end, 3)),), ()
+
+    gaps: list[dict[str, float]] = []
+    if times[0] - start >= minimum_loss:
+        gaps.append({"start": round(start, 3), "end": round(times[0], 3),
+                     "duration": round(times[0] - start, 3)})
+    for previous, current in zip(times, times[1:]):
+        missing_duration = current - previous - sample_interval
+        if missing_duration >= minimum_loss:
+            gap_start = min(end, previous + sample_interval / 2)
+            gaps.append({"start": round(gap_start, 3), "end": round(current, 3),
+                         "duration": round(current - gap_start, 3)})
+    tail_start = times[-1] + sample_interval / 2
+    if end - tail_start >= minimum_loss:
+        gaps.append({"start": round(tail_start, 3), "end": round(end, 3),
+                     "duration": round(end - tail_start, 3)})
+
+    if not gaps:
+        return ((round(start, 3), round(end, 3)),), ()
+
+    segments: list[tuple[float, float]] = []
+    cursor = start
+    for gap in gaps:
+        gap_start, gap_end = float(gap["start"]), float(gap["end"])
+        if gap_start - cursor >= minimum_segment:
+            segments.append((round(cursor, 3), round(gap_start, 3)))
+        cursor = gap_end
+    if end - cursor >= minimum_segment:
+        segments.append((round(cursor, 3), round(end, 3)))
+    return tuple(segments) or ((round(start, 3), round(end, 3)),), tuple(gaps)
+
+
+class SubjectContinuityAnalyzer:
+    """Conservative prominent-person continuity analysis for T1.1 footage."""
+
+    VOC_PERSON_CLASS = 15
+
+    def __init__(self, model_dir: Path):
+        self.model_dir = Path(model_dir)
+        self.prototxt = self.model_dir / "mobilenet_ssd_deploy.prototxt"
+        self.weights = self.model_dir / "mobilenet_ssd.caffemodel"
+        self._cv2 = None
+        self._np = None
+        self._net = None
+
+    @staticmethod
+    def supports(unit: str | None) -> bool:
+        return bool(unit in SUPPORTED_PERSON_UNITS)
+
+    @property
+    def available(self) -> bool:
+        if not self.prototxt.is_file() or not self.weights.is_file():
+            return False
+        try:
+            import cv2  # type: ignore
+            import numpy as np  # type: ignore
+        except ImportError:
+            return False
+        self._cv2, self._np = cv2, np
+        return True
+
+    def _network(self):
+        if self._net is None:
+            if not self.available:
+                raise RuntimeError("主体检测组件未安装")
+            self._net = self._cv2.dnn.readNetFromCaffe(str(self.prototxt), str(self.weights))
+        return self._net
+
+    def _person_area_ratios(self, frame) -> list[float]:
+        cv2, np = self._cv2, self._np
+        height, width = frame.shape[:2]
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 0.007843, (300, 300), 127.5)
+        net = self._network()
+        net.setInput(blob)
+        detections = net.forward()
+        ratios: list[float] = []
+        for index in range(detections.shape[2]):
+            confidence = float(detections[0, 0, index, 2])
+            class_id = int(detections[0, 0, index, 1])
+            if class_id != self.VOC_PERSON_CLASS or confidence < 0.25:
+                continue
+            x1, y1, x2, y2 = detections[0, 0, index, 3:7] * np.array([width, height, width, height])
+            box_width = max(0.0, min(float(width), x2) - max(0.0, x1))
+            box_height = max(0.0, min(float(height), y2) - max(0.0, y1))
+            ratios.append((box_width * box_height) / max(1.0, float(width * height)))
+        return ratios
+
+    def analyze(self, path: Path, start: float, end: float, unit: str | None) -> SubjectContinuity:
+        original = ((round(start, 3), round(end, 3)),)
+        if not self.supports(unit):
+            return SubjectContinuity(False, False, "NOT_APPLICABLE", original,
+                                     evidence={"method": "prominent_person", "reason": "该单元未启用人物主体切分"})
+        if not self.available:
+            return SubjectContinuity(False, False, "UNAVAILABLE", original,
+                                     evidence={"method": "prominent_person", "reason": "缺少 OpenCV 或离线人物模型"})
+        if end - start < 5.0:
+            return SubjectContinuity(True, False, "TOO_SHORT", original,
+                                     evidence={"method": "mobilenet_ssd_prominent_person"})
+
+        cv2 = self._cv2
+        cap = cv2.VideoCapture(str(path))
+        if not cap.isOpened():
+            return SubjectContinuity(True, False, "UNREADABLE", original,
+                                     evidence={"method": "mobilenet_ssd_prominent_person"})
+
+        sample_interval = 0.5
+        samples: list[tuple[float, float]] = []
+        at = float(start)
+        try:
+            while at < end + 0.001:
+                cap.set(cv2.CAP_PROP_POS_MSEC, at * 1000.0)
+                ok, frame = cap.read()
+                if ok:
+                    areas = self._person_area_ratios(frame)
+                    samples.append((round(at, 3), max(areas, default=0.0)))
+                at += sample_interval
+        finally:
+            cap.release()
+
+        seed_end = min(end, start + 5.0)
+        seed_areas = [area for at, area in samples if at <= seed_end and area > 0]
+        baseline = float(statistics.median(seed_areas)) if seed_areas else 0.0
+        # A prominent tracked athlete should be appreciably larger than distant
+        # spectators. The relative floor adapts to the subject's opening scale.
+        prominence_floor = max(0.014, baseline * 0.30)
+        present = [at for at, area in samples if area >= prominence_floor]
+        seed_present = [at for at in present if at <= seed_end]
+        reliable = len(seed_present) >= 4 and len(present) >= 6 and (not present or present[0] <= start + 1.0)
+        evidence = {
+            "method": "mobilenet_ssd_prominent_person",
+            "sample_interval": sample_interval,
+            "baseline_area_ratio": float(round(baseline, 5)),
+            "prominence_floor": float(round(prominence_floor, 5)),
+            "sample_count": len(samples),
+            "present_count": len(present),
+        }
+        if not reliable:
+            return SubjectContinuity(True, False, "LOW_CONFIDENCE", original, evidence=evidence)
+
+        segments, gaps = split_presence_samples(start, end, present, sample_interval=sample_interval)
+        status = "SPLIT" if len(segments) > 1 or segments != original else "PASS"
+        return SubjectContinuity(True, True, status, segments, gaps, evidence)

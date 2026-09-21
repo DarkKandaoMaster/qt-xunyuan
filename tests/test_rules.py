@@ -76,6 +76,18 @@ class RuleEngineTests(unittest.TestCase):
         hard_fail = self.result("R17", duration=4.9)
         self.assertTrue(self.engine.automatic_reject([hard_fail]))
 
+    def test_r11_subject_split_is_a_reviewable_pass_not_a_rejection(self):
+        result = self.result("R11", subject_check="PASS", subject_split_applied=True,
+                             subject_loss_intervals=[{"start": 14.25, "end": 19.0}])
+        self.assertEqual(result.status, RuleStatus.PASS)
+        self.assertFalse(result.deterministic)
+        self.assertFalse(self.engine.automatic_reject([result]))
+
+    def test_r11_legacy_clip_needing_trim_is_not_marked_failed(self):
+        result = self.result("R11", subject_check="TRIM_REQUIRED", subject_trim_required=True)
+        self.assertEqual(result.status, RuleStatus.UNKNOWN)
+        self.assertFalse(result.deterministic)
+
     def test_r9_defers_proxy_resolution_and_checks_final_source(self):
         proxy = self.result("R9", bucket="T1", source_type="PROXY", width=854, height=480)
         self.assertEqual(proxy.status, RuleStatus.UNKNOWN)
