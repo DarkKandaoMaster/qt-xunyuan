@@ -402,6 +402,27 @@ class Database:
                  json.dumps(data.get("facts", {}), ensure_ascii=False), now()))
             return int(cur.lastrowid), True
 
+    def trim_candidate(self, candidate_id: int, start_time: float, end_time: float,
+                       duration_bucket: str | None, facts: dict[str, Any]) -> None:
+        with self.connect() as con:
+            row = con.execute("SELECT source_id,status FROM candidate_shots WHERE id=?", (candidate_id,)).fetchone()
+            if not row:
+                raise KeyError("候选不存在")
+            if row["status"] != "WAITING_REVIEW":
+                raise ValueError("只有待人工审核的候选可以调整边界")
+            if con.execute("SELECT 1 FROM final_clips WHERE candidate_id=?", (candidate_id,)).fetchone():
+                raise ValueError("已经进入最终处理的候选不能再调整边界")
+            duplicate = con.execute("""SELECT id FROM candidate_shots
+                                       WHERE source_id=? AND start_time=? AND end_time=? AND id<>?""",
+                                    (row["source_id"], start_time, end_time, candidate_id)).fetchone()
+            if duplicate:
+                raise ValueError(f"相同时间范围已存在候选 #{duplicate['id']}")
+            con.execute("""UPDATE candidate_shots
+                           SET start_time=?,end_time=?,duration=?,duration_bucket=?,facts_json=?
+                           WHERE id=?""",
+                        (start_time, end_time, end_time - start_time, duration_bucket,
+                         json.dumps(facts, ensure_ascii=False), candidate_id))
+
     def clear_replaceable_candidates(self, source_id: int) -> int:
         """Remove stale machine-only slices before re-running scene detection."""
         with self.connect() as con:

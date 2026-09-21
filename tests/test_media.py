@@ -8,10 +8,25 @@ from types import SimpleNamespace
 
 from qt_tool.db import Database
 from qt_tool.media import MediaPipeline, delivery_description, merge_facts
-from qt_tool.subject import split_presence_samples
+from qt_tool.subject import select_motion_valley, split_presence_samples
 
 
 class MediaTests(unittest.TestCase):
+    def test_motion_valley_prefers_quiet_point_before_action_rise(self):
+        samples = [(0.1 * index, value) for index, value in enumerate(
+            [24, 22, 20, 18, 16, 14, 14, 15, 18, 24, 30, 32, 29]
+        )]
+        selected = select_motion_valley(samples)
+        self.assertIsNotNone(selected)
+        self.assertGreaterEqual(selected[0], 0.4)
+        self.assertLessEqual(selected[0], 0.8)
+
+    def test_motion_valley_does_not_guess_without_sustained_rise(self):
+        samples = [(0.1 * index, value) for index, value in enumerate(
+            [20, 19, 18, 17, 16, 16, 17, 16, 17, 18, 17, 18, 19]
+        )]
+        self.assertIsNone(select_motion_valley(samples))
+
     def test_subject_loss_splits_instead_of_rejecting_whole_shot(self):
         present = [index / 2 for index in range(0, 29)]
         present += [19 + index / 2 for index in range(0, 16)]

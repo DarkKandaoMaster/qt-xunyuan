@@ -9,6 +9,12 @@
       <div class="section-head"><div><h2 id="candidate-title">候选判断</h2><p id="queue-meta">载入中…</p></div></div>
       <div class="recommend"><div><label>桶</label><select id="bucket"></select></div><div><label>单元</label><select id="unit"></select></div><div><label>人称</label><select id="viewpoint"><option value="">待人工判断</option><option value="first_person">第一人称</option><option value="third_person">第三人称</option></select></div></div>
       <textarea id="notes" rows="2" placeholder="拒绝原因、if→then、物理反馈等备注"></textarea>
+      <div class="trim-panel">
+        <div class="trim-head"><strong>自动建议边界 + 人工微调</strong><span id="boundary-risk" class="badge">待分析</span></div>
+        <p id="boundary-advice">系统建议仅作辅助，保存前请播放确认动作起止完整。</p>
+        <div class="trim-inputs"><label>起点（源视频秒）<input id="trim-start" type="number" step="0.01"></label><label>终点（源视频秒）<input id="trim-end" type="number" step="0.01"></label></div>
+        <div class="trim-actions"><button id="set-start" class="secondary">当前位置设起点</button><button id="set-end" class="secondary">当前位置设终点</button><button id="apply-boundary" class="secondary">采用系统建议</button><button id="save-trim">保存裁剪</button></div>
+      </div>
       <div class="rule-list" id="rules"><div class="empty">请选择候选</div></div>
       <div class="actions"><button id="accept">接受 A</button><button class="danger" id="reject">拒绝 R</button><button class="secondary wide" id="edit">保存标签 E</button><button class="secondary" id="prev">← 上一条</button><button class="secondary" id="next">下一条 →</button></div>
       <div class="hotkeys">快捷键：A 接受 · R 拒绝 · E 保存标签 · Space 播放/暂停 · ←/→ 前后候选</div>

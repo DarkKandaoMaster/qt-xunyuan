@@ -20,9 +20,12 @@ class SubjectContinuity:
     segments: tuple[tuple[float, float], ...]
     gaps: tuple[dict[str, float], ...] = ()
     evidence: dict[str, Any] | None = None
+    boundary_advice: dict[str, dict[str, Any]] | None = None
 
     def facts_for(self, segment: tuple[float, float]) -> dict[str, Any]:
         evidence = dict(self.evidence or {})
+        key = f"{segment[0]:.3f}:{segment[1]:.3f}"
+        advice = dict((self.boundary_advice or {}).get(key, {}))
         return {
             "subject_check": "PASS" if self.reliable else "UNKNOWN",
             "subject_detector": evidence.get("method"),
@@ -31,6 +34,9 @@ class SubjectContinuity:
             "subject_segment_end": round(segment[1], 3),
             "subject_loss_intervals": list(self.gaps),
             "subject_detection_evidence": evidence,
+            "analysis_segment_start": round(segment[0], 3),
+            "analysis_segment_end": round(segment[1], 3),
+            "boundary_suggestion": advice,
         }
 
 
@@ -81,6 +87,32 @@ def split_presence_samples(
     if end - cursor >= minimum_segment:
         segments.append((round(cursor, 3), round(end, 3)))
     return tuple(segments) or ((round(start, 3), round(end, 3)),), tuple(gaps)
+
+
+def select_motion_valley(samples: list[tuple[float, float]]) -> tuple[float, float] | None:
+    """Choose a low-motion point only when it precedes a sustained motion rise.
+
+    A single noisy frame is deliberately insufficient.  Returning ``None`` is
+    preferable to offering a plausible-looking but unsafe automatic trim.
+    """
+    if len(samples) < 7:
+        return None
+    smoothed: list[tuple[float, float]] = []
+    for index, (at, _) in enumerate(samples):
+        left, right = max(0, index - 1), min(len(samples), index + 2)
+        smoothed.append((at, sum(score for _, score in samples[left:right]) / (right - left)))
+    candidates: list[tuple[float, float, float]] = []
+    for index in range(2, len(smoothed) - 4):
+        at, score = smoothed[index]
+        future = [value for _, value in smoothed[index + 1:min(len(smoothed), index + 11)]]
+        elevated = [value for value in future if value / max(score, 0.001) >= 1.45]
+        rise = (statistics.median(elevated) / max(score, 0.001)) if len(elevated) >= 3 else 0.0
+        if rise >= 1.45:
+            candidates.append((score, -at, rise))
+    if candidates:
+        score, negative_at, _ = min(candidates)
+        return round(-negative_at, 3), round(score, 3)
+    return None
 
 
 class SubjectContinuityAnalyzer:
@@ -138,6 +170,77 @@ class SubjectContinuityAnalyzer:
             ratios.append((box_width * box_height) / max(1.0, float(width * height)))
         return ratios
 
+    def _motion_samples(self, path: Path, start: float, end: float, step: float = 0.1) -> list[tuple[float, float]]:
+        cv2, np = self._cv2, self._np
+        cap = cv2.VideoCapture(str(path))
+        previous = None
+        samples: list[tuple[float, float]] = []
+        at = start
+        try:
+            while at <= end + 0.001:
+                cap.set(cv2.CAP_PROP_POS_MSEC, at * 1000.0)
+                ok, frame = cap.read()
+                if not ok:
+                    at += step
+                    continue
+                gray = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (320, 180)).astype(np.float32)
+                if previous is not None:
+                    shift, _ = cv2.phaseCorrelate(previous, gray)
+                    transform = np.float32([[1, 0, shift[0]], [0, 1, shift[1]]])
+                    aligned = cv2.warpAffine(previous, transform, (320, 180), flags=cv2.INTER_LINEAR,
+                                             borderMode=cv2.BORDER_REFLECT)
+                    samples.append((round(at, 3), float(np.mean(np.abs(gray - aligned)))))
+                previous = gray
+                at += step
+        finally:
+            cap.release()
+        return samples
+
+    def _boundary_advice(
+        self,
+        path: Path,
+        segments: tuple[tuple[float, float], ...],
+        gaps: tuple[dict[str, float], ...],
+    ) -> dict[str, dict[str, Any]]:
+        advice: dict[str, dict[str, Any]] = {}
+        for segment_start, segment_end in segments:
+            key = f"{segment_start:.3f}:{segment_end:.3f}"
+            item: dict[str, Any] = {
+                "suggestion_available": False,
+                "suggested_start": round(segment_start, 3),
+                "suggested_end": round(segment_end, 3),
+                "start_risk": "REVIEW",
+                "end_risk": "REVIEW",
+                "confidence": "LOW",
+                "reason": "起止动作完整性需要人工确认",
+            }
+            ends_at_loss = any(abs(float(gap["start"]) - segment_end) <= 0.3 for gap in gaps)
+            starts_after_loss = any(abs(float(gap["end"]) - segment_start) <= 0.3 for gap in gaps)
+            if ends_at_loss and segment_end - segment_start >= 8.0:
+                # Only a small rollback is allowed.  Larger corrections should
+                # remain a human editing decision, not an algorithmic guess.
+                search_start = max(segment_start + 5.0, segment_end - 3.5)
+                search_end = segment_end - 1.0
+                valley = select_motion_valley(self._motion_samples(path, search_start, search_end))
+                item.update({
+                    "end_risk": "HIGH",
+                    "confidence": "LOW",
+                    "reason": "主体离场时动作可能尚未完成；未找到可靠转折点时仅提示风险，不自动建议裁剪",
+                })
+                if valley:
+                    item.update({
+                        "suggestion_available": True,
+                        "suggested_end": round(valley[0], 3),
+                        "confidence": "MEDIUM",
+                        "reason": "主体离场时动作可能尚未完成；检测到离场前的低运动转折点，请播放确认后再采用",
+                    })
+                    item["motion_score"] = valley[1]
+            if starts_after_loss:
+                item["start_risk"] = "HIGH"
+                item["reason"] += "；该段从主体重新出现处开始，需确认不是动作中段"
+            advice[key] = item
+        return advice
+
     def analyze(self, path: Path, start: float, end: float, unit: str | None) -> SubjectContinuity:
         original = ((round(start, 3), round(end, 3)),)
         if not self.supports(unit):
@@ -192,4 +295,5 @@ class SubjectContinuityAnalyzer:
 
         segments, gaps = split_presence_samples(start, end, present, sample_interval=sample_interval)
         status = "SPLIT" if len(segments) > 1 or segments != original else "PASS"
-        return SubjectContinuity(True, True, status, segments, gaps, evidence)
+        boundary_advice = self._boundary_advice(path, segments, gaps)
+        return SubjectContinuity(True, True, status, segments, gaps, evidence, boundary_advice)

@@ -80,6 +80,14 @@ video { width: 100%; height: 100%; object-fit: contain; }
 .recommend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
 .recommend label { color: var(--muted); font-size: 11px; }
 .recommend select { width: 100%; margin-top: 4px; }
+.trim-panel { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #101722; }
+.trim-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.trim-panel p { margin: 7px 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.trim-inputs, .trim-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.trim-inputs label { color: var(--muted); font-size: 11px; }
+.trim-inputs input { width: 100%; margin-top: 4px; box-sizing: border-box; }
+.trim-actions { margin-top: 8px; }
+.trim-actions button { padding: 8px; }
 .rule-list { max-height: 480px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; }
 .rule { display: grid; grid-template-columns: 44px 86px 1fr; gap: 7px; align-items: start; padding: 9px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .rule:last-child { border: 0; }

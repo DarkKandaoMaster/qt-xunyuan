@@ -8,6 +8,21 @@ from qt_tool.db import Database
 
 
 class DatabaseTests(unittest.TestCase):
+    def test_waiting_candidate_can_be_trimmed_and_facts_are_persisted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "test.sqlite3")
+            source_id, _ = db.add_source(
+                {"platform": "youtube", "video_id": "trim", "url": "https://example.test/v", "title": "A"}
+            )
+            candidate_id, _ = db.add_candidate({"source_id": source_id, "start_time": 10.0, "end_time": 25.0,
+                                                 "duration": 15.0, "facts": {"duration": 15.0}})
+            db.trim_candidate(candidate_id, 10.5, 22.9, "short", {"duration": 12.4, "boundary_reviewed": True})
+            updated = db.get_candidate(candidate_id)
+            self.assertEqual(updated["start_time"], 10.5)
+            self.assertEqual(updated["end_time"], 22.9)
+            self.assertAlmostEqual(updated["duration"], 12.4)
+            self.assertIn('"boundary_reviewed": true', updated["facts_json"])
+
     def test_source_dedup_and_persistent_candidate(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "test.sqlite3")

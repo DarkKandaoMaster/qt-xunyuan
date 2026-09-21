@@ -135,6 +135,7 @@ class Handler(BaseHTTPRequestHandler):
                 item = self.app.db.get_candidate(candidate_id)
                 if not item:
                     raise KeyError("候选不存在")
+                item["facts"] = json.loads(item.get("facts_json") or "{}")
                 item["rules"] = self.app.db.get_rule_results(candidate_id)
                 item["unit_rule"] = self.app.rules.units.get(item.get("candidate_unit"))
                 return self._json({"ok": True, "item": item})
@@ -183,6 +184,12 @@ class Handler(BaseHTTPRequestHandler):
                         data["manual_rule_overrides"] = {r["rule_id"]: r["reason"] for r in failures}
                 review_id = self.app.db.review(candidate_id, data)
                 return self._json({"ok": True, "review_id": review_id})
+            if match := re.fullmatch(r"/api/candidates/(\d+)/trim", path):
+                candidate_id = int(match.group(1))
+                result = self.app.pipeline.trim_candidate(
+                    candidate_id, float(data["start_time"]), float(data["end_time"])
+                )
+                return self._json({"ok": True, **result})
             if match := re.fullmatch(r"/api/candidates/(\d+)/finalize", path):
                 candidate_id = int(match.group(1))
                 result = self.app.pipeline.final_qa_and_deliver(candidate_id)

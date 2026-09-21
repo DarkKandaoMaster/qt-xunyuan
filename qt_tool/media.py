@@ -371,6 +371,43 @@ class MediaPipeline:
         black = sum(float(x) for x in re.findall(r"black_duration:([0-9.]+)", proc.stderr))
         return min(1.0, black / duration)
 
+    def trim_candidate(self, candidate_id: int, start_time: float, end_time: float) -> dict[str, Any]:
+        candidate = self.db.get_candidate(candidate_id)
+        if not candidate:
+            raise KeyError("候选不存在")
+        if not all(math.isfinite(value) for value in (start_time, end_time)):
+            raise ValueError("裁剪时间必须是有效数字")
+        facts = json.loads(candidate.get("facts_json") or "{}")
+        allowed_start = float(facts.get("analysis_segment_start", facts.get("subject_segment_start", candidate["start_time"])))
+        allowed_end = float(facts.get("analysis_segment_end", facts.get("subject_segment_end", candidate["end_time"])))
+        start_time, end_time = round(float(start_time), 3), round(float(end_time), 3)
+        if start_time < allowed_start - 0.001 or end_time > allowed_end + 0.001:
+            raise ValueError(f"人工微调只能在原候选范围 {allowed_start:.3f}s–{allowed_end:.3f}s 内收缩")
+        if end_time <= start_time:
+            raise ValueError("终点必须晚于起点")
+        duration = end_time - start_time
+        if duration < 5.0:
+            raise ValueError("调整后的候选不得短于 5 秒")
+        duration_bucket, _, _ = self.rules.duration_bucket(duration)
+        facts.update({
+            "duration": duration,
+            "manual_trim_applied": True,
+            "manual_trim_start": start_time,
+            "manual_trim_end": end_time,
+            "boundary_reviewed": True,
+        })
+        suggestion = dict(facts.get("boundary_suggestion") or {})
+        suggestion["applied_or_reviewed"] = True
+        facts["boundary_suggestion"] = suggestion
+        self.db.trim_candidate(candidate_id, start_time, end_time, duration_bucket, facts)
+        results = self.rules.evaluate(facts)
+        gate = self.rules.unit_gate(candidate.get("candidate_unit"))
+        if gate:
+            results.append(gate)
+        self.db.save_rule_results(candidate_id, [result.to_dict() for result in results])
+        updated = self.db.get_candidate(candidate_id)
+        return {"candidate": updated, "rules": [result.to_dict() for result in results]}
+
     def clip_final(self, candidate_id: int) -> Path:
         candidate = self.db.get_candidate(candidate_id)
         if not candidate:
