@@ -1,61 +1,589 @@
 {
-  "version": 3,
+  "version": 4,
+  "collection_scope": {
+    "updated": "2026-09-22",
+    "viewpoint": "third_person",
+    "note": "客户当前不采集第一人称；搜索词是待人工筛选线索，不保证结果人称或质量。"
+  },
   "defaults": {
-    "negative": ["montage", "compilation", "shorts", "gameplay", "reaction", "subtitles", "lyrics"]
+    "negative": [
+      "montage",
+      "compilation",
+      "shorts",
+      "gameplay",
+      "reaction",
+      "subtitles",
+      "lyrics"
+    ]
   },
   "templates": {
-    "T1.1": {"positive": ["parkour tracking shot 4k", "freerunning follow camera 4k", "urban parkour long take", "parkour POV GoPro 4k"]},
-    "T1.2": {"positive": ["cycling follow camera 4k", "skateboard long take 4k", "tennis tracking shot 4k"]},
-    "T1.3": {"positive": ["skydiving POV 4k long take", "wingsuit follow camera 4k", "roller coaster POV 4k"]},
-    "T1.4": {"positive": ["movie fight scene long take 4k", "stunt chase continuous shot", "cinematic combat tracking shot"]},
-    "T1.5": {"positive": ["scuba diving follow shot 4k", "underwater swimming POV 4k"]},
-    "T1.6": {"positive": ["cinematic car tracking shot 4k", "driving POV 4k no music", "motorcycle follow camera 4k"]},
-    "T1.7": {"positive": ["helicopter flight POV 4k", "aircraft cinematic follow 4k", "drone aircraft tracking 4k"]},
-    "T1.8": {"positive": ["boat cinematic tracking shot 4k", "speedboat follow camera 4k"]},
-    "T1.9": {"positive": ["sci fi vehicle movie scene 4k", "mech boarding continuous shot", "spaceship cinematic tracking shot"]},
-    "T2.1": {"positive": ["sci fi short film device scene", "movie magic spell scene", "superhero power activation scene", "fantasy short film magic effects", "actor hologram interaction scene", "sci fi control panel actor"]},
-    "T2.2": {"positive": ["sci fi short film exploration", "fantasy adventure short film", "space station corridor scene", "superhero discovers powers scene", "cosplay cinematic adventure 4k", "first person sci fi short film"]},
-    "T3.1": {"positive": ["POV handshake 4k", "POV hug friend", "POV petting dog 4k", "POV feeding pet", "couple hug one take", "dog grooming owner 4k"]},
-    "T3.2": {"positive": ["street interview two people 4k", "couple conversation one take", "two actors dialogue wide shot", "friends talking standing 4k", "POV conversation with friend", "face to face conversation scene"]},
-    "T3.3": {"positive": ["walking with friend POV 4k", "two friends walking cinematic", "couple walking tracking shot", "friends hiking together 4k", "walking interview one take", "follow shot friends talking"]},
-    "T3.4": {"positive": ["partner workout teamwork 4k", "two people carry furniture", "POV passing object", "helping someone stand up", "team lifting challenge", "moving furniture together 4k"]},
-    "T3.5": {"positive": ["eye contact challenge couple", "POV person looks at camera", "couple silent eye contact", "actor eye contact close up", "turns looks at camera scene", "mutual gaze cinematic scene"]},
-    "T4.1": {"positive": ["POV morning routine 4k", "POV eating breakfast", "POV coffee drinking", "POV reading book 4k", "POV using phone", "first person daily routine"]},
-    "T4.2": {"positive": ["POV cooking 4k", "POV woodworking", "POV cleaning satisfying", "POV drawing process", "POV vegetable cutting", "hands pottery making 4k"]},
-    "T4.3": {"positive": ["POV desk organization", "POV packing backpack", "POV coffee making", "POV bartending 4k", "hands organizing tools", "POV meal preparation"]},
-    "T4.4": {"positive": ["POV open fridge", "POV kitchen cabinets", "POV drawer organization", "person opens garage door", "POV car door open close", "hands opening storage box"]},
-    "T5.1": {"positive": ["train journey scenery 4k", "car driving mountain road exterior", "boat leaving harbor 4k", "bus journey countryside 4k", "motorcycle road trip cinematic", "tram ride city transition"]},
-    "T5.2": {"positive": ["ocean waves real time 4k", "waterfall real time 4k", "thunderstorm real time 4k", "wildfire documentary wide shot", "snowstorm street real time", "volcano eruption documentary 4k"]},
-    "T5.3": {"positive": ["street dance performance 4k", "marching band parade 4k", "football team training 4k", "group fitness class 4k", "theater rehearsal wide shot", "basketball team practice 4k"]},
-    "T5.4": {"positive": ["traffic intersection 4k fixed camera", "train passing station 4k", "airport ground operations 4k", "ships passing harbor 4k", "city traffic real time 4k", "tram passing street 4k"]},
-    "T5.5": {"positive": ["domino chain reaction 4k", "Rube Goldberg machine 4k", "factory assembly line 4k", "relay race baton passing", "warehouse conveyor belt 4k", "marble run chain reaction"]},
-    "T5.6": {"positive": ["night market walking tour 4k", "street festival 4k", "parade crowd 4k", "fireworks crowd reaction 4k", "food market tour 4k", "city celebration street 4k"]},
-    "T5.7": {"positive": ["bird flock murmuration 4k", "wildebeest migration 4k", "fish school underwater 4k", "sheep herd moving 4k", "marathon crowd 4k", "cyclist peloton 4k"]},
-    "T6.1": {"positive": ["solo travel cinematic 4k landmark", "travel film person exploring", "cinematic travel vlog 4k", "couple travel film landmark", "model walking landmark cinematic", "tour guide landmark 4k"]},
-    "T6.2": {"positive": ["movie locations travel vlog", "film set tour with host", "cinematic location scout 4k", "cosplay movie location cinematic", "famous filming location tour", "actor walking movie set"]},
-    "T6.3": {"positive": ["drone follow hiker 4k", "drone follow mountain biker", "FPV follow car scenic road", "drone follow boat 4k", "aerial follow runner 4k", "drone follow skier 4k"]},
-    "T6.4": {"positive": ["gimbal follow person enters building", "one take room tour host", "realtor walkthrough with host", "follow shot through doorway", "POV house walkthrough doors", "hotel room tour presenter"]},
-    "T6.5": {"positive": ["theme park vlog 4k", "haunted house walkthrough reaction", "museum tour with host", "aquarium vlog 4k", "maze walkthrough with friend", "amusement park cinematic vlog"]},
-    "T6.6": {"positive": ["cinematic hiking film 4k", "city walk cinematic person", "park walk follow shot", "campus tour with host", "trail running cinematic 4k", "street photography model walking"]},
-    "T6.7": {"positive": ["real estate presenter walkthrough", "hotel tour with host 4k", "office tour presenter", "home tour with owner", "interior cinematic person walking", "restaurant tour with host"]},
-    "T6.8": {"positive": ["stair climbing workout follow", "person walking upstairs cinematic", "escalator street photography 4k", "hiking stairs follow shot", "POV elevator ride exit", "person walking ramp tracking"]},
-    "T6.9": {"positive": ["model explores room cinematic", "actor looks around room scene", "person museum gallery cinematic", "realtor inspects room", "detective searches room scene", "camera orbit person indoors"]},
-    "T7.1": {"positive": ["chalk art process real time", "sand drawing hands 4k", "footprints snow walking 4k", "street artist mural real time", "pottery hand painting 4k", "tire tracks off road 4k"]},
-    "T7.2": {"positive": ["bowling ball collision 4k", "person knocks down dominoes", "basketball trick shot collision", "skateboard hits obstacle 4k", "shopping cart crash test", "person throwing objects target"]},
-    "T7.3": {"positive": ["blacksmith hammering metal 4k", "wood chopping 4k", "pottery clay shaping hands", "glass blowing workshop 4k", "metal forging process 4k", "craftsman bending metal"]},
-    "T7.4": {"positive": ["water pouring macro 4k real time", "fire burning wood close up 4k", "ink in water 4k real time", "ice melting real time 4k", "smoke airflow experiment 4k", "river current close up 4k"]},
-    "T7.5": {"positive": ["mountain biking follow cam 4k", "trail running cinematic 4k", "off road vehicle tracking 4k", "hiking rocky trail 4k", "motocross rough terrain 4k", "jeep rock crawling 4k"]},
-    "T7.6": {"positive": ["jeep water crossing 4k", "horse river crossing 4k", "motocross water crossing 4k", "runner splashes puddle 4k", "dog running through water 4k", "mountain bike creek crossing"]},
-    "T7.7": {"positive": ["scuba diver follow 4k", "freediving underwater 4k", "underwater dance 4k", "astronaut zero gravity training", "diver underwater tracking shot", "person floating underwater 4k"]},
-    "T7.8": {"positive": ["bike repair POV 4k", "car mechanic POV", "machine assembly hands 4k", "rope pulley demonstration", "woodworking clamp setup", "mechanic installs engine part"]},
-    "T8.1": {"positive": ["iconic movie long take 4k", "cinematic tracking shot film scene"]},
-    "T8.2": {"positive": ["famous landmark cinematic golden hour 4k", "landmark dolly shot 4k"]},
-    "T8.3": {"positive": ["BBC earth animal tracking 4k", "National Geographic cinematic animal 4k"]},
-    "T8.4": {"positive": ["cinematic backlight tracking shot 4k", "cinematic slow motion silhouette 4k"]},
-    "T9.1": {"positive": ["3D animated short film 4k character", "Pixar style animation short film"]},
-    "T9.2": {"positive": ["2D hand drawn animated short film", "anime cinematic scene no subtitles"]},
-    "T9.3": {"positive": ["stop motion clay animation short film", "claymation character scene"]},
-    "T9.4": {"positive": ["painted animation short film", "watercolor animated film"]},
-    "T9.5": {"positive": ["pixel art animated short film", "side scrolling pixel animation"]}
+    "T1.1": {
+      "positive": [
+        "parkour lines",
+        "freerunning line",
+        "parkour chase",
+        "obstacle course training",
+        "hurdle sprint training",
+        "trail running tracking shot"
+      ]
+    },
+    "T1.2": {
+      "positive": [
+        "skateboarding line",
+        "inline skating follow cam",
+        "BMX park run",
+        "mountain bike trail riding",
+        "basketball drive drill",
+        "football dribbling shooting drill"
+      ]
+    },
+    "T1.3": {
+      "positive": [
+        "roller coaster off ride",
+        "bungee jump full jump",
+        "tandem skydive outside camera",
+        "wingsuit follow camera",
+        "paragliding follow cam",
+        "giant swing release"
+      ]
+    },
+    "T1.4": {
+      "positive": [
+        "stunt fight one take",
+        "martial arts fight short film",
+        "hallway fight scene",
+        "sword fight stunt short film",
+        "foot chase stunt scene",
+        "explosion escape movie scene"
+      ]
+    },
+    "T1.5": {
+      "positive": [
+        "freediving descent",
+        "freediving ascent",
+        "scuba diver follow cam",
+        "underwater swimming tracking shot",
+        "mermaid swimming underwater",
+        "snorkeling follow diver"
+      ]
+    },
+    "T1.6": {
+      "positive": [
+        "motorcycle rolling shots",
+        "car rolling shots",
+        "rally car tracking shot",
+        "off road driving follow cam",
+        "karting trackside",
+        "parallel parking exterior view"
+      ]
+    },
+    "T1.7": {
+      "positive": [
+        "helicopter hovering maneuver",
+        "light aircraft takeoff exterior",
+        "glider aerotow takeoff",
+        "formation flying air to air",
+        "drone following plane",
+        "helicopter air to air footage"
+      ]
+    },
+    "T1.8": {
+      "positive": [
+        "jet ski follow cam",
+        "speedboat tracking shot",
+        "sailing boat tracking shot",
+        "kayak follow cam",
+        "rowing boat training",
+        "boat docking exterior"
+      ]
+    },
+    "T1.9": {
+      "positive": [
+        "Iron Man suit up scene",
+        "Dune ornithopter boarding scene",
+        "Avatar AMP suit scene",
+        "Star Wars boarding ship scene",
+        "sci fi pilot boarding vehicle scene",
+        "live action exoskeleton short film"
+      ]
+    },
+    "T2.1": {
+      "positive": [
+        "Doctor Strange portal scene",
+        "Harry Potter Wingardium Leviosa scene",
+        "Magneto moving metal movie scene",
+        "Iron Man suit assembly scene",
+        "Iron Man hologram scene",
+        "Star Wars Force push scene",
+        "sci fi biometric door scene",
+        "live action energy shield scene",
+        "spaceship automatic door movie scene",
+        "Harry Potter Lumos scene"
+      ]
+    },
+    "T2.2": {
+      "positive": [
+        "Iron Man lab scene",
+        "wizard workshop live action scene",
+        "spaceship bridge movie scene",
+        "sci fi laboratory walkthrough scene",
+        "Harry Potter wand shop scene",
+        "space station robot interaction scene",
+        "telekinesis walking movie scene",
+        "smart room sci fi short film"
+      ]
+    },
+    "T3.1": {
+      "positive": [
+        "dog groomer brushing dog",
+        "groom brushing horse",
+        "owner petting cat",
+        "farmer hand feeding goats",
+        "groomer bathing dog",
+        "reunion hug one take",
+        "two people greeting handshake",
+        "groom scratching horse",
+        "keeper grooming donkey",
+        "friends high five celebration"
+      ]
+    },
+    "T3.2": {
+      "positive": [
+        "standing sign language conversation",
+        "asking directions acting scene",
+        "street magician spectator interaction",
+        "two person acting scene one take",
+        "guide visitor conversation",
+        "vendor customer conversation",
+        "coach athlete conversation",
+        "tailor customer consultation"
+      ]
+    },
+    "T3.3": {
+      "positive": [
+        "two friends hiking together",
+        "walking and talking one take",
+        "hiking guide with visitors",
+        "couple walking talking",
+        "walking with elderly parent",
+        "two friends walking market",
+        "couple walking dog together",
+        "caregiver walking with elderly person"
+      ]
+    },
+    "T3.4": {
+      "positive": [
+        "two people playing catch",
+        "helping friend climb",
+        "two people moving table",
+        "carpenters passing tools",
+        "two people pitching tent",
+        "guiding car parking",
+        "two people carrying kayak",
+        "assisted partner stretching"
+      ]
+    },
+    "T3.5": {
+      "positive": [
+        "eye contact experiment two people",
+        "silent acting scene two people",
+        "dance partners eye contact",
+        "couple eye contact one take",
+        "two person mime scene",
+        "two shot silent movie scene"
+      ]
+    },
+    "T4.1": {
+      "positive": [
+        "person eating breakfast",
+        "tea tasting ceremony",
+        "person reading book park",
+        "person reading newspaper",
+        "person using smartphone",
+        "friends picnic eating",
+        "hiker drinking water",
+        "student reading library"
+      ]
+    },
+    "T4.2": {
+      "positive": [
+        "chef chopping vegetables",
+        "baker kneading dough",
+        "chef whisking eggs",
+        "calligrapher writing",
+        "carpenter tightening screws",
+        "shoeshiner cleaning shoes",
+        "window cleaner squeegee",
+        "woodcarver carving wood",
+        "tailor hand sewing",
+        "chef folding dumplings",
+        "noodle master hand pulled noodles",
+        "street vendor peeling pineapple",
+        "leatherworker stitching leather",
+        "chef wok cooking"
+      ]
+    },
+    "T4.3": {
+      "positive": [
+        "waiter setting table",
+        "mechanic organizing toolbox",
+        "librarian shelving books",
+        "waiter serving plates",
+        "fruit vendor packing basket",
+        "person packing suitcase",
+        "tea master pouring tea",
+        "mechanic sorting parts",
+        "florist arranging bouquets display",
+        "baker arranging bread tray"
+      ]
+    },
+    "T4.4": {
+      "positive": [
+        "chef opening refrigerator",
+        "cabinetmaker drawer demonstration",
+        "person opening casement window",
+        "person opening closing cabinet",
+        "person opening closing door",
+        "driver opening closing car door",
+        "worker opening roller shutter",
+        "craftsman opening tool cabinet"
+      ]
+    },
+    "T5.1": {
+      "positive": [
+        "car exiting tunnel exterior",
+        "car entering tunnel exterior",
+        "rally car forest road tracking",
+        "motorcycle forest road tracking shot",
+        "train emerging from tunnel",
+        "boat leaving harbor exterior"
+      ]
+    },
+    "T5.2": {
+      "positive": [
+        "wave hitting breakwater",
+        "tidal bore approaching",
+        "waterfall surge",
+        "avalanche real time footage",
+        "volcano eruption real time",
+        "storm gust bending trees"
+      ]
+    },
+    "T5.3": {
+      "positive": [
+        "swing dance couple full dance",
+        "partner acrobatics routine",
+        "double dutch routine",
+        "martial arts partner routine",
+        "lion dance full performance",
+        "dog handler agility demonstration"
+      ]
+    },
+    "T5.4": {
+      "positive": [
+        "tram passing intersection",
+        "train passing level crossing",
+        "ferry arriving harbor",
+        "rally car hairpin spectator",
+        "aircraft pushback ground view",
+        "tugboat harbor maneuver"
+      ]
+    },
+    "T5.5": {
+      "positive": [
+        "domino chain reaction",
+        "Rube Goldberg machine one take",
+        "three person passing drill",
+        "brick passing chain",
+        "bucket brigade",
+        "kitchen plate passing line"
+      ]
+    },
+    "T5.6": {
+      "positive": [
+        "night market vendor serving",
+        "marching band street parade",
+        "dragon dance street parade",
+        "lantern festival parade",
+        "festival stall vendor",
+        "concert crowd leaving"
+      ]
+    },
+    "T5.7": {
+      "positive": [
+        "sheepdog herding sheep",
+        "ducks following farmer",
+        "horse herd moving",
+        "school of fish turning",
+        "parade turning corner",
+        "crowd leaving station"
+      ]
+    },
+    "T6.1": {
+      "positive": [
+        "Eiffel Tower guided walk",
+        "Colosseum guided tour",
+        "Golden Gate Bridge tour with guide",
+        "Great Wall hiking guide",
+        "Mont Saint Michel guided walk",
+        "Sydney Opera House guided walk"
+      ]
+    },
+    "T6.2": {
+      "positive": [
+        "Harry Potter studio guided tour",
+        "Hobbiton guided tour",
+        "Jurassic Park filming location tour",
+        "Star Wars filming location guided tour",
+        "movie set guided walkthrough",
+        "movie corridor tracking shot"
+      ]
+    },
+    "T6.3": {
+      "positive": [
+        "drone following hiker",
+        "drone following cyclist",
+        "drone following boat",
+        "drone following off road vehicle",
+        "drone following horse rider",
+        "drone following skier"
+      ]
+    },
+    "T6.4": {
+      "positive": [
+        "house tour one take",
+        "hotel room walkthrough host",
+        "studio tour one take",
+        "workshop guided walkthrough",
+        "greenhouse guided tour",
+        "backstage guided tour"
+      ]
+    },
+    "T6.5": {
+      "positive": [
+        "friends exploring corn maze",
+        "hedge maze guided tour",
+        "haunted house behind the scenes tour",
+        "friends exploring mirror maze",
+        "immersive exhibition guided tour",
+        "fantasy set tour with host"
+      ]
+    },
+    "T6.6": {
+      "positive": [
+        "campus tour student guide",
+        "park guided walk",
+        "neighborhood guided walk",
+        "walking loop follow cam",
+        "botanical garden guided tour",
+        "village walk with guide"
+      ]
+    },
+    "T6.7": {
+      "positive": [
+        "office tour one take",
+        "workshop tour one take",
+        "artist studio walkthrough",
+        "hotel guided walkthrough",
+        "home tour one take",
+        "museum guided walkthrough"
+      ]
+    },
+    "T6.8": {
+      "positive": [
+        "walking upstairs follow cam",
+        "walking downstairs tracking shot",
+        "following person escalator",
+        "entering elevator follow cam",
+        "walking up ramp follow cam",
+        "spiral staircase follow cam"
+      ]
+    },
+    "T6.9": {
+      "positive": [
+        "character looking around hall scene",
+        "guide looking around room",
+        "explorer looking around room",
+        "person entering courtyard looking around",
+        "over shoulder looking around scene",
+        "person walking around room one take"
+      ]
+    },
+    "T7.1": {
+      "positive": [
+        "walking in fresh snow",
+        "person drawing in sand",
+        "street artist chalk drawing",
+        "painting wall roller real time",
+        "vehicle tracks in mud",
+        "ski tracks fresh snow ground view"
+      ]
+    },
+    "T7.2": {
+      "positive": [
+        "bowling full shot",
+        "pool break shot",
+        "curling delivery",
+        "petanque throw",
+        "cornhole throw",
+        "pushing heavy box"
+      ]
+    },
+    "T7.3": {
+      "positive": [
+        "blacksmith hand forging",
+        "splitting firewood",
+        "pottery wheel throwing real time",
+        "manual pipe bending",
+        "tearing paper real time",
+        "excavator demolition wall",
+        "clay kneading real time",
+        "jumping on trampoline ground view"
+      ]
+    },
+    "T7.4": {
+      "positive": [
+        "rain washing away sand",
+        "wave washing sandcastle",
+        "stream flowing around rock",
+        "tree sap dripping",
+        "lava flow real time",
+        "flame spreading real time footage"
+      ]
+    },
+    "T7.5": {
+      "positive": [
+        "jeep rock crawling",
+        "truck articulation obstacle",
+        "goat climbing rocks",
+        "hiker scrambling rocks",
+        "bike riding down stairs",
+        "horse rocky trail"
+      ]
+    },
+    "T7.6": {
+      "positive": [
+        "person splashing puddles",
+        "jeep water crossing",
+        "horse crossing stream",
+        "dog jumping into water",
+        "kayak launching into water",
+        "diver surfacing",
+        "mountain bike creek crossing",
+        "trail runner stream crossing"
+      ]
+    },
+    "T7.7": {
+      "positive": [
+        "astronaut floating ISS",
+        "zero gravity flight floating",
+        "scuba neutral buoyancy",
+        "freediver floating upward",
+        "diver underwater somersault",
+        "sea turtle swimming underwater"
+      ]
+    },
+    "T7.8": {
+      "positive": [
+        "manual winch pulling",
+        "pulley lifting load demonstration",
+        "worker turning valve wheel",
+        "carpenter mortise tenon assembly",
+        "mechanic fitting bicycle wheel",
+        "worker folding ladder",
+        "carpenter fitting door hinges",
+        "worker ratchet strap tightening"
+      ]
+    },
+    "T8.1": {
+      "positive": [
+        "1917 tracking shot scene",
+        "Goodfellas tracking shot scene",
+        "Children of Men long take scene",
+        "movie hallway tracking shot",
+        "movie crowd tracking shot",
+        "movie staircase long take"
+      ]
+    },
+    "T8.2": {
+      "positive": [
+        "Eiffel Tower cinematic tracking shot",
+        "Rome cinematic gimbal walk",
+        "Great Wall cinematic tracking shot",
+        "Golden Gate Bridge cinematic walk",
+        "London landmark tracking shot",
+        "Sydney Opera House tracking shot"
+      ]
+    },
+    "T8.3": {
+      "positive": [
+        "penguin walking BBC Earth",
+        "fox hunting documentary",
+        "cheetah running documentary",
+        "sea otter swimming documentary",
+        "craftsman documentary tracking shot",
+        "herder documentary tracking shot"
+      ]
+    },
+    "T8.4": {
+      "positive": [
+        "backlit dancer tracking shot",
+        "runner mist cinematic tracking shot",
+        "horse rider sunset tracking shot",
+        "rain walking slow motion cinematic",
+        "skateboard backlight tracking shot",
+        "cinematic gimbal long take person"
+      ]
+    },
+    "T9.1": {
+      "positive": [
+        "3D animated chase short film",
+        "3D animated animal short film",
+        "3D animated cooking short film",
+        "3D animated robot short film",
+        "3D animated comedy short film",
+        "3D animated dance short film"
+      ]
+    },
+    "T9.2": {
+      "positive": [
+        "hand drawn running animation short film",
+        "2D animated chase short film",
+        "hand drawn cooking animation",
+        "2D animation walking in rain",
+        "hand drawn animal short film",
+        "cel animation short film"
+      ]
+    },
+    "T9.3": {
+      "positive": [
+        "claymation cooking short film",
+        "claymation chase",
+        "stop motion animal short film",
+        "puppet stop motion short film",
+        "felt stop motion short film",
+        "Aardman short film"
+      ]
+    },
+    "T9.4": {
+      "positive": [
+        "paint on glass animation short film",
+        "watercolor animal animation short film",
+        "oil painting animation walking",
+        "watercolor animated short film journey",
+        "Loving Vincent scene",
+        "painted animation dance short film"
+      ]
+    },
+    "T9.5": {
+      "positive": [
+        "pixel art animated short film",
+        "pixel animation chase short film",
+        "pixel art walking short film",
+        "side scrolling animated short film",
+        "pixel art city character animation",
+        "pixel art animal short film"
+      ]
+    }
   }
 }

@@ -8,6 +8,15 @@ from pathlib import Path
 from typing import Any
 
 
+def is_standard_24p(fps: float) -> bool:
+    """Recognize 24000/1001 and its three-decimal metadata representation."""
+    return math.isclose(fps, 24000 / 1001, rel_tol=0, abs_tol=0.0005)
+
+
+def meets_live_action_fps(fps: float) -> bool:
+    return math.isfinite(fps) and (fps >= 24 or is_standard_24p(fps))
+
+
 class RuleStatus(StrEnum):
     PASS = "PASS"
     FAIL = "FAIL"
@@ -221,12 +230,15 @@ class RuleEngine:
         if str(facts.get("source_type") or "").upper() == "PROXY":
             return RuleResult("SPEC_FPS", RuleStatus.UNKNOWN, "代理帧率不用于淘汰，最终按原片帧率判定", {})
         fps = facts.get("fps")
-        if not bucket or fps is None or float(fps) <= 0:
+        if not bucket or fps is None or not math.isfinite(float(fps)) or float(fps) <= 0:
             return RuleResult("SPEC_FPS", RuleStatus.UNKNOWN, "缺少可靠帧率", {})
         if bucket == "T9":
             return RuleResult("SPEC_FPS", RuleStatus.PASS, "T9 按原作帧率，不设统一下限", {"fps": fps}, True)
-        status = RuleStatus.PASS if float(fps) >= 24 else RuleStatus.FAIL
-        return RuleResult("SPEC_FPS", status, f"实拍桶帧率 {float(fps):.3f} fps，要求不低于 24 fps", {"fps": fps}, True)
+        status = RuleStatus.PASS if meets_live_action_fps(float(fps)) else RuleStatus.FAIL
+        reason = (f"实拍桶帧率 {float(fps):.3f} fps，按标准 24p 认可，保留原帧率、不插帧"
+                  if is_standard_24p(float(fps)) else
+                  f"实拍桶帧率 {float(fps):.3f} fps，要求不低于 24 fps（含标准 23.976fps / 24p）")
+        return RuleResult("SPEC_FPS", status, reason, {"fps": fps}, True)
 
     def _file_specs(self, facts: dict[str, Any]) -> list[RuleResult]:
         results: list[RuleResult] = []

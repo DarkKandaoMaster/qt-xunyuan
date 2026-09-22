@@ -20,7 +20,7 @@ from typing import Any
 
 from .config import Settings
 from .db import Database
-from .rules import RuleEngine, RuleStatus
+from .rules import RuleEngine, RuleStatus, meets_live_action_fps
 from .subject import SubjectContinuityAnalyzer
 
 
@@ -42,12 +42,12 @@ def format_preflight(formats: list[dict[str, Any]], bucket: str | None) -> dict[
     width, height = (1920, 1080) if bucket == "T9" else (2560, 1440)
     videos = [f for f in formats if f.get("vcodec") not in (None, "none")]
     def fits(f):
-        return (f.get("width") or 0) >= width and (f.get("height") or 0) >= height and (bucket == "T9" or (f.get("fps") or 0) >= 24)
+        return (f.get("width") or 0) >= width and (f.get("height") or 0) >= height and (bucket == "T9" or meets_live_action_fps(float(f.get("fps") or 0)))
     if any(fits(f) for f in videos):
-        return {"status": "PASS", "reason": "存在符合分辨率和帧率要求的格式；清晰度、原生画质仍需审核"}
+        return {"status": "PASS", "reason": "存在符合分辨率和帧率要求的格式（标准23.976fps按24p认可）；清晰度、原生画质仍需审核"}
     if not videos or any(not f.get("width") or not f.get("height") or (bucket != "T9" and not f.get("fps")) for f in videos):
         return {"status": "UNKNOWN", "reason": "格式信息不完整，暂不能确定规格"}
-    return {"status": "FAIL", "reason": f"当前可用格式均不满足 {width}×{height}" + ("、≥24fps" if bucket != "T9" else "")}
+    return {"status": "FAIL", "reason": f"当前可用格式均不满足 {width}×{height}" + ("、≥24fps（含标准23.976fps / 24p）" if bucket != "T9" else "")}
 
 
 def _command_exists(command: str) -> bool:
@@ -140,6 +140,11 @@ def ytdlp_error_message(stderr: str, action: str) -> str:
         return "无法读取 Firefox 登录信息。请用 Firefox 登录 YouTube、完全退出 Firefox 后重试；不要提供账号密码。"
     if "sign in to confirm" in lowered or "not a bot" in lowered:
         return "YouTube 要求登录确认。请确认 Firefox 已登录 YouTube 并完全退出浏览器，然后重试。"
+    if any(marker in lowered for marker in (
+        "eof occurred in violation of protocol", "read timed out", "connection reset",
+        "remote end closed connection", "incomplete read", "more expected",
+    )):
+        return f"{action}失败：视频网络连接中断或读取超时。请确认代理线路稳定后重试；这不是登录提示。"
     network_markers = (
         "failed to establish a new connection", "unable to download api page",
         "network is unreachable", "name resolution", "winerror 10013",
@@ -147,9 +152,10 @@ def ytdlp_error_message(stderr: str, action: str) -> str:
     )
     if any(marker in lowered for marker in network_markers):
         return f"{action}失败：无法连接 YouTube。请检查网络或代理设置后重试。"
-    meaningful = [line.strip() for line in raw.splitlines() if line.strip().startswith("ERROR:")]
+    meaningful = [line.strip() for line in raw.splitlines()
+                  if line.strip().startswith("ERROR:") and line.strip() != "ERROR:"]
     detail = meaningful[-1] if meaningful else raw
-    if not detail or detail.count("�") >= 3:
+    if not detail or detail.strip() == "ERROR:" or detail.count("�") >= 3:
         return f"{action}失败，请检查网络后重试；若仍失败，请查看工作台服务日志。"
     return detail[-800:]
 
@@ -561,8 +567,14 @@ class MediaPipeline:
             self.db.update_source(source_id, status="FINAL_QUEUED", error=None)
             with self._final_download_slots:
                 self.db.update_source(source_id, status="FINAL_DOWNLOADING", error=None)
-                proc = _run_download(self._ytdlp("-f", "bestvideo+bestaudio/best", "--merge-output-format", "mp4",
-                                    "--no-playlist", "--no-progress", "--socket-timeout", "30", "--retries", "3",
+                # Prefer native site formats up to 4K. Only fall back above 4K
+                # when the source offers no bounded format; never upscale.
+                final_format = "bestvideo[height<=2160]+bestaudio/best[height<=2160]/bestvideo+bestaudio/best"
+                proc = _run_download(self._ytdlp("-f", final_format, "--merge-output-format", "mp4",
+                                    "--no-playlist", "--no-progress", "--socket-timeout", "30", "--retries", "5",
+                                    "--retry-sleep", "http:exp=1:8", "--extractor-retries", "3",
+                                    "--retry-sleep", "extractor:exp=1:8", "--fragment-retries", "5",
+                                    "--retry-sleep", "fragment:exp=1:8", "--abort-on-unavailable-fragments",
                                     "-o", str(output), source["url"], use_cookies=True),
                                      attempt, "source.*", 180, 7200)
                 # Keep diagnostics locally; redact signed download URLs.
@@ -775,8 +787,11 @@ class MediaPipeline:
         output = self._clip_path(candidate)
         start, duration = float(candidate["start_time"]), float(candidate["duration"])
         # Accurate input seeking + normal encode preserves content and avoids keyframe drift.
-        proc = _run([self.settings.ffmpeg_bin, "-hide_banner", "-y", "-ss", f"{start:.3f}", "-i", str(original),
-                     "-t", f"{duration:.3f}", "-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-preset", "medium",
+        # Unbounded decoder/encoder threads can consume tens of GB per 8K job.
+        # Bound both sides without changing resolution, frame rate or CRF.
+        proc = _run([self.settings.ffmpeg_bin, "-hide_banner", "-y", "-ss", f"{start:.3f}",
+                     "-threads", "4", "-i", str(original),
+                     "-t", f"{duration:.3f}", "-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-threads", "4", "-preset", "medium",
                      "-crf", "17", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output)], timeout=7200)
         if proc.returncode != 0:
             raise RuntimeError(proc.stderr[-2000:] or "最终剪片失败")

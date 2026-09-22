@@ -24,6 +24,19 @@ class RuleEngineTests(unittest.TestCase):
     def test_4_9_seconds_fails_r17(self):
         self.assertEqual(self.result("R17", duration=4.9).status, RuleStatus.FAIL)
 
+    def test_standard_24p_keeps_actual_fps_and_passes_live_action(self):
+        for bucket in (f'T{i}' for i in range(1, 9)):
+            for fps in (23.976, 24000 / 1001, 24, 25, 29.97, 60):
+                with self.subTest(bucket=bucket, fps=fps):
+                    result = self.result('SPEC_FPS', bucket=bucket, fps=fps, source_type='FINAL')
+                    self.assertEqual(result.status, RuleStatus.PASS)
+                    self.assertEqual(result.evidence['fps'], fps)
+        self.assertIn('标准 24p', self.result('SPEC_FPS', bucket='T5', fps=23.976).reason)
+        for fps in (12, 23, 23.9, 23.97, 23.98):
+            self.assertEqual(self.result('SPEC_FPS', bucket='T5', fps=fps).status, RuleStatus.FAIL)
+        self.assertEqual(self.result('SPEC_FPS', bucket='T9', fps=12).status, RuleStatus.PASS)
+        self.assertEqual(self.result('SPEC_FPS', bucket='T5', fps=23.976, source_type='PROXY').status, RuleStatus.UNKNOWN)
+
     def test_duration_buckets(self):
         self.assertEqual(self.engine.duration_bucket(10)[0], "short")
         self.assertEqual(self.engine.duration_bucket(20)[0], "medium")

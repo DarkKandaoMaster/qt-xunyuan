@@ -14,7 +14,7 @@ from qt_tool.web import App
 
 class PreflightTests(unittest.TestCase):
     def test_specs_must_match_in_same_format(self):
-        formats = [dict(vcodec='vp9', width=3840, height=2160, fps=23.976),
+        formats = [dict(vcodec='vp9', width=3840, height=2160, fps=23),
                    dict(vcodec='h264', width=1280, height=720, fps=30)]
         self.assertEqual(format_preflight(formats, 'T7')['status'], 'FAIL')
         self.assertEqual(format_preflight(formats, 'T9')['status'], 'PASS')
@@ -22,6 +22,17 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(format_preflight(formats, 'T7')['status'], 'PASS')
         self.assertEqual(format_preflight([], 'T7')['status'], 'UNKNOWN')
         self.assertEqual(format_preflight(formats, None)['status'], 'UNKNOWN')
+
+    def test_standard_24p_is_accepted_without_relaxing_other_specs(self):
+        for fps in (23.976, 24000 / 1001, 24, 25, 29.97, 60):
+            with self.subTest(fps=fps):
+                video = dict(vcodec='vp9', width=3840, height=2160, fps=fps)
+                self.assertEqual(format_preflight([video], 'T5')['status'], 'PASS')
+                video['width'], video['height'] = 1920, 1080
+                self.assertEqual(format_preflight([video], 'T5')['status'], 'FAIL')
+        for fps in (23, 23.9, 23.97, 23.98):
+            video = dict(vcodec='vp9', width=3840, height=2160, fps=fps)
+            self.assertEqual(format_preflight([video], 'T5')['status'], 'FAIL')
 
     def test_preflight_blocks_before_download_and_unknown_requires_opt_in(self):
         pipeline = MediaPipeline.__new__(MediaPipeline)

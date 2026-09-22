@@ -16,6 +16,16 @@ from qt_tool.subject import select_motion_valley, split_presence_samples
 
 
 class MediaTests(unittest.TestCase):
+    def test_network_interruption_is_not_hidden_by_empty_error_lines(self):
+        for detail in ('EOF occurred in violation of protocol (_ssl.c:1007)',
+                       'Read timed out. (read timeout=30.0)',
+                       '2060975 bytes read, 8112107 more expected'):
+            message = ytdlp_error_message('[download] Got error: ' + detail + '\nERROR: \nERROR:', '最终源下载')
+            self.assertIn('网络连接中断或读取超时', message)
+            self.assertNotEqual(message, 'ERROR:')
+        self.assertIn('查看工作台服务日志', ytdlp_error_message('ERROR:', '最终源下载'))
+        self.assertEqual(ytdlp_error_message('ERROR: meaningful failure\nERROR:', '最终源下载'), 'ERROR: meaningful failure')
+
     def test_low_resolution_rejected_before_clip(self):
         from unittest.mock import Mock
         from qt_tool.rules import RuleEngine

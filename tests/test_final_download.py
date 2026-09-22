@@ -26,6 +26,10 @@ class FinalDownloadTests(unittest.TestCase):
     def test_same_source_downloaded_once_with_concurrent_candidates(self):
         started, release = Event(), Event()
         def run(args, *a, **k):
+            self.assertEqual(args[args.index('-f') + 1].split('/')[0], 'bestvideo[height<=2160]+bestaudio')
+            self.assertEqual(args[args.index('--retries') + 1], '5')
+            self.assertIn('http:exp=1:8', args)
+            self.assertIn('--abort-on-unavailable-fragments', args)
             started.set()
             self.assertTrue(release.wait(4))
             output = Path(args[args.index('-o') + 1].replace('%(ext)s', 'mp4'))
@@ -122,6 +126,26 @@ class FinalDownloadTests(unittest.TestCase):
         second = self.pipeline._clip_path({'id': 11, 'source_id': 2, 'original_path': 'original/source_2/b/source.mp4'})
         self.assertNotEqual(first, second)
         self.assertEqual(first.name, 'source_1-1.mp4')
+
+    def test_clip_bounds_decoder_and_encoder_threads_without_lowering_quality(self):
+        original = self.root / 'original' / 'source.mp4'
+        self.pipeline.download_final = Mock(return_value=original)
+        self.pipeline.db.get_candidate = Mock(return_value={
+            'id': 1, 'source_id': self.sid, 'status': 'ACCEPTED', 'start_time': 16.147, 'duration': 5.0,
+        })
+        self.pipeline._clip_path = Mock(return_value=self.root / 'clips' / 'output.mp4')
+        with patch('qt_tool.media._command_exists', return_value=True), patch(
+            'qt_tool.media._run', return_value=SimpleNamespace(returncode=0, stderr='')
+        ) as run:
+            self.pipeline.clip_final(1)
+        args = run.call_args.args[0]
+        split = args.index('-i')
+        self.assertEqual(args[:split][-2:], ['-threads', '4'])
+        output_args = args[split + 2:]
+        self.assertEqual(output_args[output_args.index('-threads') + 1], '4')
+        self.assertEqual(output_args[output_args.index('-crf') + 1], '17')
+        self.assertNotIn('-r', args)
+        self.assertNotIn('-vf', args)
 
 
 if __name__ == '__main__':
