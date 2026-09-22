@@ -63,6 +63,9 @@ class Settings:
     port: int
     max_preflight_concurrency: int = 3
     max_analysis_concurrency: int = 1
+    ytdlp_cookies_file: str = ""
+    ytdlp_po_token_url: str = ""
+    ytdlp_proxy: str = ""
 
 
 def _detect_ytdlp_js_runtime(root: Path) -> str:
@@ -82,6 +85,14 @@ def _detect_ytdlp_js_runtime(root: Path) -> str:
         if str(path) not in {"", "."} and path.is_file():
             return f"{name}:{path}"
     return ""
+
+
+def _detect_cookies_file(root: Path) -> str:
+    configured = os.environ.get("YTDLP_COOKIES_FILE", "").strip()
+    if configured:
+        return configured
+    candidate = root / "www.youtube.com_cookies.txt"
+    return str(candidate) if candidate.is_file() else ""
 
 
 def load_settings() -> Settings:
@@ -114,6 +125,9 @@ def load_settings() -> Settings:
         ytdlp_bin=os.environ.get("YTDLP_BIN", str(bundled_ytdlp) if bundled_ytdlp.exists() else "yt-dlp"),
         ytdlp_js_runtime=_detect_ytdlp_js_runtime(ROOT),
         ytdlp_cookies_from_browser=os.environ.get("YTDLP_COOKIES_FROM_BROWSER", "").strip(),
+        ytdlp_cookies_file=_detect_cookies_file(ROOT),
+        ytdlp_po_token_url=os.environ.get("YTDLP_PO_TOKEN_URL", "").strip(),
+        ytdlp_proxy=os.environ.get("YTDLP_PROXY", "").strip(),
         ytdlp_sleep_interval=max(0, _as_int("YTDLP_SLEEP_INTERVAL", 5)),
         ytdlp_max_sleep_interval=max(0, _as_int("YTDLP_MAX_SLEEP_INTERVAL", 10)),
         ytdlp_stall_timeout_seconds=max(30, _as_int("YTDLP_STALL_TIMEOUT_SECONDS", 120)),
