@@ -562,9 +562,11 @@ class Database:
             raise ValueError("未知运镜筛选分类")
         return field + "=?", [camera]
 
-    def count_candidates(self, status: str | None = None, bucket: str | None = None, camera: str | None = None) -> int:
+    @classmethod
+    def _candidate_filters(cls, status: str | None = None, bucket: str | None = None,
+                           camera: str | None = None, unit: str | None = None) -> tuple[str, list[Any]]:
         conditions, args = (["c.status=?"], [status]) if status else ([], [])
-        bucket_condition, bucket_args = self._bucket_condition("c.candidate_unit", bucket)
+        bucket_condition, bucket_args = cls._bucket_condition("c.candidate_unit", bucket)
         if bucket_condition:
             if bucket == "unassigned":
                 bucket_condition = "((c.candidate_bucket IS NULL OR c.candidate_bucket='') AND " + bucket_condition + ")"
@@ -573,31 +575,25 @@ class Database:
                 bucket_args = [bucket] + bucket_args
             conditions.append(bucket_condition)
             args.extend(bucket_args)
-        camera_condition, camera_args = self._camera_condition(camera)
+        camera_condition, camera_args = cls._camera_condition(camera)
         if camera_condition:
             conditions.append(camera_condition)
             args.extend(camera_args)
-        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        if unit:
+            conditions.append("c.candidate_unit=?")
+            args.append(unit)
+        return ("WHERE " + " AND ".join(conditions) if conditions else ""), args
+
+    def count_candidates(self, status: str | None = None, bucket: str | None = None,
+                         camera: str | None = None, unit: str | None = None) -> int:
+        where, args = self._candidate_filters(status, bucket, camera, unit)
         with self.connect() as con:
             return int(con.execute(f"SELECT COUNT(*) FROM candidate_shots c {where}", args).fetchone()[0])
 
     def list_candidates(self, status: str | None = None, limit: int = 100, offset: int = 0,
-                        bucket: str | None = None, camera: str | None = None) -> list[dict[str, Any]]:
-        conditions, args = (["c.status=?"], [status]) if status else ([], [])
-        bucket_condition, bucket_args = self._bucket_condition("c.candidate_unit", bucket)
-        if bucket_condition:
-            if bucket == "unassigned":
-                bucket_condition = "((c.candidate_bucket IS NULL OR c.candidate_bucket='') AND " + bucket_condition + ")"
-            else:
-                bucket_condition = "(c.candidate_bucket=? OR " + bucket_condition + ")"
-                bucket_args = [bucket] + bucket_args
-            conditions.append(bucket_condition)
-            args.extend(bucket_args)
-        camera_condition, camera_args = self._camera_condition(camera)
-        if camera_condition:
-            conditions.append(camera_condition)
-            args.extend(camera_args)
-        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+                        bucket: str | None = None, camera: str | None = None,
+                        unit: str | None = None) -> list[dict[str, Any]]:
+        where, args = self._candidate_filters(status, bucket, camera, unit)
         with self.connect() as con:
             rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url,
                                     (SELECT notes FROM reviews r WHERE r.candidate_id=c.id ORDER BY r.id DESC LIMIT 1) rejection_reason

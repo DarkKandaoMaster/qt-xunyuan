@@ -194,11 +194,13 @@ class Handler(BaseHTTPRequestHandler):
                 status = q.get("status", [None])[0]
                 bucket = q.get("bucket", [None])[0]
                 camera = q.get("camera", [None])[0]
-                total = self.app.db.count_candidates(status, bucket, camera)
+                unit = q.get("unit", [None])[0]
+                total = self.app.db.count_candidates(status, bucket, camera, unit)
                 page, page_size, offset = self._pagination(q, total, 100)
                 return self._json({"ok": True,
-                                   "items": self.app.db.list_candidates(status, page_size, offset, bucket, camera),
-                                   "total": total, "page": page, "page_size": page_size, "bucket": bucket})
+                                   "items": self.app.db.list_candidates(status, page_size, offset, bucket, camera, unit),
+                                   "total": total, "page": page, "page_size": page_size, "bucket": bucket,
+                                   "camera": camera, "unit": unit})
             if path == "/api/final-candidates":
                 q = parse_qs(parsed.query)
                 state = q.get("state", ["pending"])[0]
