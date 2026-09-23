@@ -22,6 +22,8 @@ from .config import Settings
 from .db import Database
 from .rules import RuleEngine, RuleStatus, meets_live_action_fps
 from .subject import SubjectContinuityAnalyzer
+from .camera import CameraMotionAnalyzer
+from .operator_framing import OperatorFramingAnalyzer
 
 
 class ToolMissing(RuntimeError):
@@ -256,6 +258,9 @@ class MediaPipeline:
         self._final_download_slots = BoundedSemaphore(max(1, getattr(settings, "max_download_concurrency", 2)))
         root = getattr(settings, "root", settings.data_dir.parent)
         self.subject_analyzer = SubjectContinuityAnalyzer(Path(root) / "tools" / "models")
+        self.camera_analyzer = CameraMotionAnalyzer()
+        self.operator_analyzer = OperatorFramingAnalyzer(Path(root))
+        self._camera_slot = BoundedSemaphore(1)
         if hasattr(self.db, "delivery_filename_rows"):
             self.repair_delivery_filenames()
 
@@ -671,6 +676,7 @@ class MediaPipeline:
             # Stage 1 is always the hard-cut detector. Only a single-shot range
             # reaches stage 2, where sustained subject absence creates new
             # reviewable slices instead of rejecting the whole source.
+            camera = self.camera_analyzer.analyze(path, shot_start, shot_end)
             subject = self.subject_analyzer.analyze(path, shot_start, shot_end, unit)
             for start, end in subject.segments:
                 duration = end - start
@@ -680,6 +686,9 @@ class MediaPipeline:
                 duration_bucket, _, _ = self.rules.duration_bucket(duration)
                 facts = dict(info, duration=duration, shot_count=1, unit=unit, bucket=bucket,
                              material_type=material_type, source_type="PROXY", **subject.facts_for((start, end)))
+                facts["camera_motion"] = (camera if (start, end) == (shot_start, shot_end)
+                                          else self.camera_analyzer.analyze(path, start, end))
+                facts["operator_framing"] = self.operator_analyzer.analyze(path, start, end, unit)
                 cid, created = self.db.add_candidate({"source_id": source_id, "start_time": start, "end_time": end,
                     "duration": duration, "proxy_path": str(path), "candidate_bucket": bucket, "candidate_unit": unit,
                     "material_type": material_type, "duration_bucket": duration_bucket, "score": source.get("source_score", 0),
@@ -695,6 +704,34 @@ class MediaPipeline:
                     created_ids.append(cid)
         self.db.update_source(source_id, status="WAITING_REVIEW", analysis_completed=1, error=None)
         return created_ids
+
+    def check_candidate_operator(self, candidate_id: int) -> dict:
+        candidate = self.db.get_candidate(candidate_id)
+        if not candidate:
+            raise KeyError("候选不存在")
+        if candidate["status"] != "WAITING_REVIEW":
+            raise ValueError("仅为待审核候选补做操作者检测")
+        result = self.operator_analyzer.analyze(Path(candidate["proxy_path"] or ""),
+            candidate["start_time"], candidate["end_time"], candidate.get("candidate_unit"))
+        self.db.save_visual_advice(candidate_id, candidate["start_time"], candidate["end_time"],
+                                   "operator_framing", result)
+        return result
+
+    def check_candidate_camera(self, candidate_id: int) -> dict:
+        candidate = self.db.get_candidate(candidate_id)
+        if not candidate:
+            raise KeyError("候选不存在")
+        if candidate["status"] != "WAITING_REVIEW":
+            raise ValueError("仅为待审核候选补做运镜检测，不修改历史交付")
+        if not self._camera_slot.acquire(blocking=False):
+            raise ValueError("已有运镜补检正在运行，请稍后再试")
+        try:
+            result = self.camera_analyzer.analyze(Path(candidate["proxy_path"] or ""),
+                                                  candidate["start_time"], candidate["end_time"])
+            self.db.save_camera_advice(candidate_id, candidate["start_time"], candidate["end_time"], result)
+            return result
+        finally:
+            self._camera_slot.release()
 
     def representative_frame_hash(self, path: Path, at_seconds: float) -> str | None:
         """Representative-frame dHash, robust to resolution and moderate recompression."""
@@ -756,6 +793,9 @@ class MediaPipeline:
             "manual_trim_end": end_time,
             "boundary_reviewed": True,
         })
+        # Advice belongs to an exact interval, never reuse after a manual trim.
+        facts.pop("camera_motion", None)
+        facts.pop("operator_framing", None)
         suggestion = dict(facts.get("boundary_suggestion") or {})
         suggestion["applied_or_reviewed"] = True
         facts["boundary_suggestion"] = suggestion

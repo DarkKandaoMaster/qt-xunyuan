@@ -193,10 +193,11 @@ class Handler(BaseHTTPRequestHandler):
                 q = parse_qs(parsed.query)
                 status = q.get("status", [None])[0]
                 bucket = q.get("bucket", [None])[0]
-                total = self.app.db.count_candidates(status, bucket)
+                camera = q.get("camera", [None])[0]
+                total = self.app.db.count_candidates(status, bucket, camera)
                 page, page_size, offset = self._pagination(q, total, 100)
                 return self._json({"ok": True,
-                                   "items": self.app.db.list_candidates(status, page_size, offset, bucket),
+                                   "items": self.app.db.list_candidates(status, page_size, offset, bucket, camera),
                                    "total": total, "page": page, "page_size": page_size, "bucket": bucket})
             if path == "/api/final-candidates":
                 q = parse_qs(parsed.query)
@@ -270,6 +271,12 @@ class Handler(BaseHTTPRequestHandler):
                         data["manual_rule_overrides"] = {r["rule_id"]: r["reason"] for r in failures}
                 review_id = self.app.db.review(candidate_id, data)
                 return self._json({"ok": True, "review_id": review_id})
+            if match := re.fullmatch(r"/api/candidates/(\d+)/camera-check", path):
+                result = self.app.pipeline.check_candidate_camera(int(match.group(1)))
+                return self._json({"ok": True, "camera_motion": result})
+            if match := re.fullmatch(r"/api/candidates/(\d+)/operator-check", path):
+                result = self.app.pipeline.check_candidate_operator(int(match.group(1)))
+                return self._json({"ok": True, "operator_framing": result})
             if match := re.fullmatch(r"/api/candidates/(\d+)/trim", path):
                 candidate_id = int(match.group(1))
                 result = self.app.pipeline.trim_candidate(

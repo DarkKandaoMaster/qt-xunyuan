@@ -38,6 +38,17 @@
 
 维护入口是 `docs/activity_topics.txt`（活动、短词、选片提醒）。修改后运行 `python scripts/build_topic_library.py`，同时更新 `web/topic-library.html` 与 `rules/search_templates.yaml`，防止两套词库不一致。生成器和测试会检查正向关键词是否混入第一人称词。
 
+## 运镜预筛（试运行，只提示）
+
+- 镜头切分后，复用低清代理逐片段估计背景整体运动；不把主体动作、轻微抖动或画面缩放当作有效运镜。
+- 人工审核新增“运镜预筛”面板：疑似固定／抖动、疑似变焦、持续整体运动、混合、无法判断、尚未检测。可与 T1–T9 分类组合筛选，仍每页 20 条；展开时间段可点击定位。
+- 历史待审核候选可点“补做运镜检测”，不重新切镜、不重新下载。保存人工裁剪后会清除旧运镜结论，需要重新检测。
+- 该功能**不会自动拒绝、自动通过或自动裁剪**，不改历史交付和原始规则。变焦不合格，但自动缩放提示不能可靠区分镜头变焦、数字推近和真实推拉，必须人工核验，R15 仍由人工确认。
+- 基于 OpenCV 背景特征／光流／鲁棒变换，最多使用 480 像素宽图像、约 4fps 抽样、3 秒窗口；单次检测有 20 秒软预算，缺依赖、超时或背景证据不足均返回“无法判断”。不需要下载模型。
+- 实拍快速跟拍的视差、近景遮挡、背景低纹理可能产生较多“无法判断”；动画／屏幕内容的整体位移不代表真实运镜。现阶段不宣称真实素材准确率，需收集人工对照样本后再决定是否启用自动淘汰。
+
+回归测试：`python -m unittest tests.test_camera -v`，包含固定背景局部动作、平移、旋转、抖动、变焦、混合、低纹理、超时，以及状态不变、裁剪失效、筛选分页等安全检查。
+
 ## 快速启动
 
 在 PowerShell 中运行：
@@ -144,6 +155,28 @@ AV1 原片优先尝试 NVIDIA 显卡全片解码校验；显卡不可用或检�
 - OSS 上传不在 MVP 内；交付目录和 CSV 已准备好。
 
 ## 规则审计入口
+
+### 操作者大小与完整度（辅助预筛）
+
+客户补充：操作者过小、只露手导致人物不完整，不符合采集要求。新镜头分析会为人物活动单元（T1.1、T3、T4、T7.1/2/3/8）附加构图提示；历史待审核片段可在审核页展开“操作者大小与完整度”补检。动物、载具、纯物理现象不套用人物门槛。
+
+- 结果包括疑似过小、仅见手部、部分身体、混合风险、可见头肩及部分身体、无法判断。可点击抽样区间定位播放。至少连续三次抽样才形成片段风险提示。
+- 只给提示，不自动拒绝、接受或裁剪；未检出人物不等于只露手。多人、遮挡、异常姿态、疑似切换到旁观者时应人工确认。可见头肩不等于整条合格，也不要求所有活动都必须拍到脚。
+- 大小采用可见关键点包围范围估计，不是真实人体分割面积。试运行提示阈值为面积小于 3.5% 且高度小于 30%（`qt_tool/operator_framing.py` 中常量）；不是客户正式数值标准，须用客户样本校准。
+- 每秒约一帧，最长片段最多 60 帧；单进程超时 40 秒、并发 1。组件缺失、繁忙或证据不足返回“无法判断”，不阻止正常审核。低清代理、手部遮挡、离画面边缘很近的手均可能漏检。保存裁剪后旧提示失效，需要重新检测。
+- 审核侧栏的接受、拒绝、前后候选与分页独立于详情滚动；运镜、人物检测、规则详情可折叠，风险摘要仍显示。
+
+可选检测环境与主应用隔离安装（Windows，目录已被 Git 忽略）：
+
+```powershell
+python -m venv --system-site-packages tools/operator_env
+tools/operator_env/Scripts/python.exe -m pip install -r requirements-operator.txt
+New-Item -ItemType Directory -Force tools/models
+Invoke-WebRequest 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task' -OutFile tools/models/pose_landmarker_lite.task
+Invoke-WebRequest 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task' -OutFile tools/models/hand_landmarker.task
+```
+
+安装完成后重启服务即可使用。实际速度受 CPU、片段长度及模型冷启动影响；本功能不替代客户验收。
 
 - `rules/qt_rules_v4.yaml`：唯一业务规则源
 - `rules/conflicts.yaml`：PDF 内部冲突与临时策略

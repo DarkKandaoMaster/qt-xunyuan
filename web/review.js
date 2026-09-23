@@ -2,6 +2,10 @@ const $ = selector => document.querySelector(selector);
 const REVIEW_PAGE_SIZE = 20;
 let queue = [], index = 0, current = null, ruleBook = null;
 let reviewPage = 1, reviewTotal = 0, reviewBucket = '';
+let reviewCamera = '', cameraBusy = false;
+let operatorBusy = false;
+const operatorLabels = {SMALL:'操作者疑似过小', HANDS_ONLY:'疑似仅见手部', PARTIAL:'人物可见不完整', VISIBLE:'检测到人物头肩及部分身体', MIXED:'部分时段有构图风险', UNKNOWN:'无法可靠判断', NOT_APPLICABLE:'当前单元未启用', UNTESTED:'尚未检测'};
+const cameraLabels = {FIXED:'高度疑似固定机位', SHAKE:'疑似固定伴轻微抖动', ZOOM:'疑似变焦／缩放', MOVING:'检测到持续整体运动', MIXED:'混合片段', UNKNOWN:'无法可靠判断', UNTESTED:'尚未检测'};
 
 async function api(url, options = {}) {
   const response = await fetch(url, {headers: {'Content-Type': 'application/json'}, ...options});
@@ -39,6 +43,12 @@ async function init() {
     reviewBucket = event.target.value;
     await loadQueue(1, 0);
   };
+  $('#camera-filter').onchange = async event => {
+    reviewCamera = event.target.value;
+    await loadQueue(1, 0);
+  };
+  $('#camera-check').onclick = checkCamera;
+  $('#operator-check').onclick = checkOperator;
   await loadQueue(1, 0);
 }
 
@@ -52,7 +62,7 @@ function fillUnits(selected = '') {
 
 async function loadQueue(page = reviewPage, desiredIndex = 0) {
   const bucket = encodeURIComponent(reviewBucket);
-  const data = await api(`/api/candidates?status=WAITING_REVIEW&bucket=${bucket}&page=${page}&page_size=${REVIEW_PAGE_SIZE}`);
+  const data = await api(`/api/candidates?status=WAITING_REVIEW&bucket=${bucket}&camera=${encodeURIComponent(reviewCamera)}&page=${page}&page_size=${REVIEW_PAGE_SIZE}`);
   queue = data.items;
   reviewPage = Number(data.page || 1);
   reviewTotal = Number(data.total || 0);
@@ -74,6 +84,8 @@ async function show() {
     $('#candidate-title').textContent = '候选判断';
     $('#queue-meta').textContent = reviewTotal ? '当前页没有待审核候选' : '该分类没有待审核候选';
     $('#rules').innerHTML = '<div class="empty">已处理完毕</div>';
+    $('#rules-summary').textContent = '暂无候选';
+    renderCamera();
     return;
   }
   index = Math.max(0, Math.min(index, queue.length - 1));
@@ -107,7 +119,77 @@ async function show() {
   $('#viewpoint').value = current.candidate_viewpoint || '';
   $('#notes').value = '';
   renderTrim();
+  renderCamera();
   renderRules(current.rules);
+}
+
+function renderCamera() {
+  renderOperator();
+  const report = current?.facts?.camera_motion || {};
+  const state = report.status || 'UNTESTED';
+  $('#camera-status').textContent = cameraLabels[state] || cameraLabels.UNKNOWN;
+  $('#camera-status').className = `badge ${['FIXED','SHAKE','ZOOM','MIXED'].includes(state) ? 'warn' : 'unknown'}`;
+  $('#camera-reason').textContent = current ? (report.reason || '该片段尚无检测结果；可补做检测，不改变审核状态。') : '当前筛选下没有待审核候选，可切换筛选。';
+  $('#camera-check').disabled = !current || cameraBusy;
+  $('#camera-check').textContent = cameraBusy ? '检测中…' : report.status ? '重新检测运镜' : '补做运镜检测';
+  $('#camera-intervals').replaceChildren();
+  for (const part of report.intervals || []) {
+    const button = document.createElement('button');
+    button.className = 'secondary';
+    button.textContent = `${Number(part.start).toFixed(2)}–${Number(part.end).toFixed(2)}s · ${cameraLabels[part.status] || '无法判断'}`;
+    button.onclick = () => { $('#video').currentTime = Math.max(current.start_time, Number(part.start)); };
+    $('#camera-intervals').append(button);
+  }
+}
+
+function renderOperator() {
+  const report = current?.facts?.operator_framing || {};
+  const state = report.status || 'UNTESTED';
+  $('#operator-status').textContent = operatorLabels[state] || operatorLabels.UNKNOWN;
+  $('#operator-status').className = `badge ${['SMALL','HANDS_ONLY','PARTIAL','MIXED'].includes(state) ? 'warn' : 'unknown'}`;
+  $('#operator-reason').textContent = current ? report.reason || '可补检当前片段，检测操作者是否过小或仅露局部身体。' : '请选择待审核候选。';
+  $('#operator-check').disabled = !current || operatorBusy;
+  $('#operator-check').textContent = operatorBusy ? '检测中…' : report.status ? '重新检测操作者' : '补做操作者检测';
+  $('#operator-intervals').replaceChildren();
+  for (const part of report.intervals || []) {
+    const button = document.createElement('button');
+    button.className = 'secondary';
+    button.textContent = `${Number(part.start).toFixed(2)}–${Number(part.end).toFixed(2)}s · ${operatorLabels[part.status] || '无法判断'}`;
+    button.title = part.reason || '';
+    button.onclick = () => { $('#video').currentTime = Math.max(current.start_time, Number(part.start)); };
+    $('#operator-intervals').append(button);
+  }
+}
+
+async function checkOperator() {
+  if (!current || operatorBusy) return;
+  const id = current.id;
+  operatorBusy = true;
+  renderOperator();
+  try {
+    const data = await api(`/api/candidates/${id}/operator-check`, {method:'POST', body:'{}'});
+    if (current?.id === id) current.facts = {...current.facts, operator_framing:data.operator_framing};
+    notice(`#${id}：${operatorLabels[data.operator_framing.status] || '检测完成'}，请人工复核。`);
+  } catch (error) { notice(error.message, true); }
+  finally { operatorBusy = false; renderOperator(); }
+}
+
+async function checkCamera() {
+  if (!current || cameraBusy) return;
+  const id = current.id;
+  cameraBusy = true;
+  renderCamera();
+  try {
+    const data = await api(`/api/candidates/${id}/camera-check`, {method:'POST', body:'{}'});
+    if (current?.id === id) {
+      current.facts = {...current.facts, camera_motion:data.camera_motion};
+      const state = data.camera_motion.status;
+      const matches = !reviewCamera || (reviewCamera === 'FIXED' ? ['FIXED','SHAKE'].includes(state) : reviewCamera === state);
+      if (!matches) await loadQueue(reviewPage, index);
+    }
+    notice(`#${id}：${cameraLabels[data.camera_motion.status] || '检测完成'}，仅供人工参考。`);
+  } catch (error) { notice(error.message, true); }
+  finally { cameraBusy = false; renderCamera(); }
 }
 
 async function moveCandidate(delta) {
@@ -122,6 +204,10 @@ async function moveCandidate(delta) {
 }
 
 function renderRules(items) {
+  const failed = items.filter(rule => ['FAIL','CONFLICT'].includes(rule.status)).length;
+  const unknown = items.filter(rule => rule.status === 'UNKNOWN').length;
+  $('#rules-summary').textContent = `${failed} 项风险 · ${unknown} 项待确认`;
+  $('#rules-summary').className = `badge ${failed ? 'warn' : 'unknown'}`;
   $('#rules').innerHTML = items.map(rule => `<div class="rule" onclick="openRule('${rule.rule_id}')"><strong>${rule.rule_id}</strong><span class="badge ${rule.status.toLowerCase()}">${rule.status}</span><p>${esc(rule.reason)}</p></div>`).join('');
 }
 

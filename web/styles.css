@@ -93,6 +93,28 @@ td small.source-error { margin-top: 5px; max-width: 520px; color: #ffb3ba; white
 .progress { height: 6px; background: #293141; border-radius: 99px; overflow: hidden; margin-top: 5px; }
 .progress i { display: block; height: 100%; background: var(--accent-2); }
 .review-layout { display: grid; grid-template-columns: minmax(500px, 1.45fr) minmax(380px, .75fr); gap: 14px; }
+.review-page .review-layout { align-items: start; }
+.review-sidebar { display: flex; flex-direction: column; height: calc(100dvh - 102px); min-height: 420px; position: sticky; top: 80px; padding: 14px; }
+.review-sidebar > .section-head { flex: none; margin-bottom: 4px; gap: 6px; }
+.review-sidebar > .recommend { flex: none; margin: 8px 0; }
+.review-sidebar .recommend > div { min-width: 0; }
+.review-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding-right: 6px; overscroll-behavior: contain; }
+.review-scroll textarea { width: 100%; resize: vertical; max-height: 140px; }
+.review-footer { flex: none; padding-top: 8px; border-top: 1px solid var(--line); background: var(--panel); }
+.review-footer .actions { margin: 0; gap: 6px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.review-footer .actions #accept, .review-footer .actions #reject { grid-column: span 3; }
+.review-footer .actions #edit, .review-footer .actions #prev, .review-footer .actions #next { grid-column: span 2; padding-inline: 4px; font-size: 12px; }
+.review-footer .pagination { padding-top: 6px; }
+.review-footer .hotkeys { margin-top: 5px; }
+.review-footer .notice { margin-top: 6px; max-height: 80px; overflow: auto; overflow-wrap: anywhere; }
+.review-scroll .rule-list { max-height: none; overflow: visible; margin-top: 8px; }
+.review-scroll .rule { grid-template-columns: minmax(65px, auto) 70px 1fr; overflow-wrap: anywhere; }
+.review-scroll details > summary { cursor: pointer; list-style: none; }
+.review-scroll details > summary::before { content: '▸'; color: var(--muted); }
+.review-scroll details[open] > summary::before { content: '▾'; }
+.review-scroll .trim-head strong { flex: 1; }
+@media (max-width: 1050px) { .review-sidebar { position: relative; top: auto; height: calc(100dvh - 82px); } }
+@media (max-height: 600px) and (min-width: 1051px) { .review-sidebar { top: 66px; height: calc(100dvh - 74px); min-height: 300px; } .review-page .page { padding-block: 8px; } .review-footer .hotkeys { display: none; } }
 .video-wrap { background: #05070a; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; display: grid; place-items: center; }
 video { width: 100%; height: 100%; object-fit: contain; }
 .clip-meta { display: flex; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--muted); }
@@ -107,6 +129,15 @@ video { width: 100%; height: 100%; object-fit: contain; }
 .trim-inputs input { width: 100%; margin-top: 4px; box-sizing: border-box; }
 .trim-actions { margin-top: 8px; }
 .trim-actions button { padding: 8px; }
+#camera-panel { overflow-wrap: anywhere; }
+#camera-panel select { width: 100%; margin-top: 6px; }
+#camera-panel details { margin-top: 8px; font-size: 12px; }
+#camera-intervals { display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; margin-top: 8px; }
+#camera-intervals button { white-space: normal; max-width: 100%; padding: 6px; font-size: 12px; }
+#operator-panel { overflow-wrap: anywhere; }
+#operator-panel details { margin-top: 8px; font-size: 12px; }
+#operator-intervals { display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; margin-top: 8px; }
+#operator-intervals button { white-space: normal; max-width: 100%; padding: 6px; font-size: 12px; }
 .rule-list { max-height: 480px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; }
 .rule { display: grid; grid-template-columns: 44px 86px 1fr; gap: 7px; align-items: start; padding: 9px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .rule:last-child { border: 0; }

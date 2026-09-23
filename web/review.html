@@ -1,25 +1,45 @@
 <!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>人工审核 · QT</title><link rel="stylesheet" href="/static/styles.css"></head>
-<body>
+<body class="review-page">
   <header class="topbar"><div class="brand">QT 视频数据生产工具 <small>人工审核</small></div><nav class="nav"><a href="/">生产台</a><a class="active" href="/review">人工审核</a></nav></header>
   <main class="page"><div class="review-layout">
     <section class="card"><div class="video-wrap"><video id="video" controls preload="metadata"></video><div class="empty" id="video-empty">暂无待审核候选</div></div><div class="clip-meta"><span id="source-meta">—</span><span id="clip-time">—</span></div></section>
-    <aside class="card">
+    <aside class="card review-sidebar">
       <div class="section-head"><div><h2 id="candidate-title">候选判断</h2><p id="queue-meta">载入中…</p></div><div class="list-controls"><select id="review-bucket-filter" aria-label="审核分类"></select></div></div>
       <div class="recommend"><div><label>桶</label><select id="bucket"></select></div><div><label>单元</label><select id="unit"></select></div><div><label>人称</label><select id="viewpoint"><option value="">待人工判断</option><option value="first_person">第一人称</option><option value="third_person">第三人称</option></select></div></div>
+      <div class="review-scroll" tabindex="0" aria-label="审核详情，可滚动">
       <textarea id="notes" rows="2" placeholder="拒绝原因、if→then、物理反馈等备注"></textarea>
-      <div class="trim-panel">
-        <div class="trim-head"><strong>自动建议边界 + 人工微调</strong><span id="boundary-risk" class="badge">待分析</span></div>
+      <details class="trim-panel" id="camera-panel">
+        <summary class="trim-head"><strong>运镜预筛</strong><span id="camera-status" class="badge unknown">尚未检测</span></summary>
+        <p>主体动作≠运镜；轻微抖动不算，变焦不合格。本检测只提示，不自动淘汰、裁剪或认定合格。</p>
+        <label for="camera-filter">按运镜结果筛选（保留分类及分页）</label>
+        <select id="camera-filter"><option value="">全部运镜状态</option><option value="FIXED">疑似固定／轻微抖动</option><option value="ZOOM">疑似变焦／缩放</option><option value="MIXED">混合片段</option><option value="MOVING">检测到持续整体运动</option><option value="UNKNOWN">无法可靠判断</option><option value="UNTESTED">尚未检测</option></select>
+        <p id="camera-reason"></p>
+        <button id="camera-check" class="secondary">补做运镜检测</button>
+        <details><summary>查看检测时间段（源视频时间）</summary><div id="camera-intervals"></div></details>
+      </details>
+      <details class="trim-panel" id="operator-panel">
+        <summary class="trim-head"><strong>操作者大小与完整度</strong><span id="operator-status" class="badge unknown">尚未检测</span></summary>
+        <p>客户补充：操作者占画面太小、仅露手导致人物不完整，均不符合要求。自动检测为辅助提示，需人工确认。</p>
+        <p id="operator-reason"></p>
+        <button id="operator-check" class="secondary">补做操作者检测</button>
+        <details><summary>查看人物抽样区间（源视频时间）</summary><p>人物范围大小为估计值；数值提示阈值尚未经客户确认。“检测到头肩”不等于整条合格。</p><div id="operator-intervals"></div></details>
+      </details>
+      <details class="trim-panel" open>
+        <summary class="trim-head"><strong>裁剪与边界微调</strong><span id="boundary-risk" class="badge">待分析</span></summary>
         <p id="boundary-advice">系统建议仅作辅助，保存前请播放确认动作起止完整。</p>
         <div class="trim-inputs"><label>起点（源视频秒）<input id="trim-start" type="number" step="0.01"></label><label>终点（源视频秒）<input id="trim-end" type="number" step="0.01"></label></div>
         <div class="trim-actions"><button id="set-start" class="secondary">当前位置设起点</button><button id="set-end" class="secondary">当前位置设终点</button><button id="apply-boundary" class="secondary">采用系统建议</button><button id="save-trim">保存裁剪</button></div>
+      </details>
+      <details class="trim-panel"><summary class="trim-head"><strong>规则判定详情</strong><span id="rules-summary" class="badge unknown">待载入</span></summary><div class="rule-list" id="rules"><div class="empty">请选择候选</div></div></details>
       </div>
-      <div class="rule-list" id="rules"><div class="empty">请选择候选</div></div>
+      <div class="review-footer">
       <div class="actions"><button id="accept">接受 A</button><button class="danger" id="reject">拒绝 R</button><button class="secondary wide" id="edit">保存标签 E</button><button class="secondary" id="prev">← 上一条</button><button class="secondary" id="next">下一条 →</button></div>
       <div class="hotkeys">快捷键：A 接受 · R 拒绝 · E 保存标签 · Space 播放/暂停 · ←/→ 前后候选</div>
       <div class="pagination" id="review-pagination"></div>
       <div class="notice" id="notice"></div>
+      </div>
     </aside>
   </div></main>
   <aside class="drawer" id="drawer"><button class="secondary" id="close-drawer" style="float:right">关闭</button><h2 id="drawer-title">规则</h2><div id="drawer-body"></div></aside>

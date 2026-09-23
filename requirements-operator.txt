@@ -1,0 +1,2 @@
+# Install inside tools/operator_env; keep optional ML dependencies isolated.
+mediapipe==0.10.32

@@ -532,7 +532,33 @@ class Database:
                               (candidate_id,)).fetchone()
             return self._dict(row)
 
-    def count_candidates(self, status: str | None = None, bucket: str | None = None) -> int:
+    def save_camera_advice(self, candidate_id: int, start: float, end: float, advice: dict) -> None:
+        self.save_visual_advice(candidate_id, start, end, "camera_motion", advice)
+
+    def save_visual_advice(self, candidate_id: int, start: float, end: float, key: str, advice: dict) -> None:
+        if key not in {"camera_motion", "operator_framing"}:
+            raise ValueError("未知视觉提示类型")
+        with self.connect() as con:
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute("SELECT status,start_time,end_time,facts_json FROM candidate_shots WHERE id=?", (candidate_id,)).fetchone()
+            if not row or row["status"] != "WAITING_REVIEW" or (row["start_time"], row["end_time"]) != (start, end):
+                raise ValueError("候选状态或边界已改变，检测结果未保存，请刷新后再试")
+            facts = json.loads(row["facts_json"] or "{}")
+            facts[key] = advice
+            con.execute("UPDATE candidate_shots SET facts_json=? WHERE id=?", (json.dumps(facts, ensure_ascii=False), candidate_id))
+
+    @staticmethod
+    def _camera_condition(camera: str | None) -> tuple[str, list]:
+        if not camera:
+            return "", []
+        field = "COALESCE(json_extract(c.facts_json, '$.camera_motion.status'), 'UNTESTED')"
+        if camera == "FIXED":
+            return field + " IN ('FIXED','SHAKE')", []
+        if camera not in {"ZOOM", "MOVING", "MIXED", "UNKNOWN", "UNTESTED"}:
+            raise ValueError("未知运镜筛选分类")
+        return field + "=?", [camera]
+
+    def count_candidates(self, status: str | None = None, bucket: str | None = None, camera: str | None = None) -> int:
         conditions, args = (["c.status=?"], [status]) if status else ([], [])
         bucket_condition, bucket_args = self._bucket_condition("c.candidate_unit", bucket)
         if bucket_condition:
@@ -543,12 +569,16 @@ class Database:
                 bucket_args = [bucket] + bucket_args
             conditions.append(bucket_condition)
             args.extend(bucket_args)
+        camera_condition, camera_args = self._camera_condition(camera)
+        if camera_condition:
+            conditions.append(camera_condition)
+            args.extend(camera_args)
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         with self.connect() as con:
             return int(con.execute(f"SELECT COUNT(*) FROM candidate_shots c {where}", args).fetchone()[0])
 
     def list_candidates(self, status: str | None = None, limit: int = 100, offset: int = 0,
-                        bucket: str | None = None) -> list[dict[str, Any]]:
+                        bucket: str | None = None, camera: str | None = None) -> list[dict[str, Any]]:
         conditions, args = (["c.status=?"], [status]) if status else ([], [])
         bucket_condition, bucket_args = self._bucket_condition("c.candidate_unit", bucket)
         if bucket_condition:
@@ -559,6 +589,10 @@ class Database:
                 bucket_args = [bucket] + bucket_args
             conditions.append(bucket_condition)
             args.extend(bucket_args)
+        camera_condition, camera_args = self._camera_condition(camera)
+        if camera_condition:
+            conditions.append(camera_condition)
+            args.extend(camera_args)
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         with self.connect() as con:
             rows = con.execute(f"""SELECT c.*,s.title source_title,s.url source_url,
