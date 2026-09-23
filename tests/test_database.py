@@ -27,17 +27,15 @@ class DatabaseTests(unittest.TestCase):
                 db.set_source_deleted(sid, True)
             self.assertIsNone(db.get_source(sid)['deleted_at'])
 
-    def test_accept_requires_explicit_viewpoint(self):
+    def test_accept_and_quota_state_need_only_bucket_and_duration(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / 'test.sqlite3')
             sid, _ = db.add_source({'platform': 'test', 'video_id': 'view', 'url': 'https://example.test/view'})
-            cid, _ = db.add_candidate({'source_id': sid, 'start_time': 0, 'end_time': 6, 'duration': 6})
-            for value in (None, '', 'unknown'):
-                with self.assertRaisesRegex(ValueError, '人称'):
-                    db.review(cid, {'decision': 'ACCEPT', 'final_viewpoint': value})
-            self.assertNotEqual(db.get_candidate(cid)['status'], 'ACCEPTED')
-            db.review(cid, {'decision': 'ACCEPT', 'final_viewpoint': 'third_person'})
+            cid, _ = db.add_candidate({'source_id': sid, 'start_time': 0, 'end_time': 6, 'duration': 6,
+                                      'duration_bucket': 'short'})
+            db.review(cid, {'decision': 'ACCEPT', 'final_bucket': 'T1', 'final_unit': 'T1.1'})
             self.assertEqual(db.get_candidate(cid)['status'], 'ACCEPTED')
+            self.assertEqual(db.quota_state(), [{'bucket': 'T1', 'duration_bucket': 'short', 'count': 1}])
 
     def test_waiting_candidate_can_be_trimmed_and_facts_are_persisted(self):
         with tempfile.TemporaryDirectory() as tmp:

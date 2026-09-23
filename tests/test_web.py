@@ -69,6 +69,26 @@ class WebPaginationTests(unittest.TestCase):
         self.assertIn('拒绝列表', result['message'])
         self.assertIn('本次未新增候选', app.analysis_summary([])['message'])
 
+    def test_quota_compares_accepted_total_with_bucket_target(self):
+        rules = RuleEngine(ROOT / "rules" / "qt_rules_v4.yaml", ROOT / "rules" / "conflicts.yaml")
+        db = Mock()
+        db.quota_state.return_value = [
+            {"bucket": "T1", "duration_bucket": "short", "count": 3},
+            {"bucket": "T1", "duration_bucket": "long", "count": 2},
+            {"bucket": "T2", "duration_bucket": "short", "count": 999},
+        ]
+        handler = Handler.__new__(Handler)
+        handler.app = SimpleNamespace(db=db, rules=rules)
+        quota = {row["bucket"]: row for row in handler._quota()}
+        t1 = quota["T1"]
+        self.assertEqual(t1["total"], {"actual": 5, "target": rules.buckets["T1"]["target_total"]})
+        self.assertEqual(t1["duration"]["short"]["actual"], 3)
+        self.assertEqual(t1["duration"]["medium"]["actual"], 0)
+        self.assertEqual(t1["largest_gap"], "短档")
+        self.assertEqual(quota["T2"]["largest_gap"], "已达标")
+        self.assertNotIn("first_person", t1)
+        self.assertNotIn("third_person", t1)
+
     def test_pagination_is_twenty_by_default_and_clamps_page(self):
         self.assertEqual(Handler._pagination({}, 45), (1, 20, 0))
         self.assertEqual(Handler._pagination({"page": ["2"]}, 45), (2, 20, 20))

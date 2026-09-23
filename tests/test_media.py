@@ -35,7 +35,7 @@ class MediaTests(unittest.TestCase):
             db.update_source(sid, original_path=str(Path(tmp) / 'original.mp4'))
             cid, _ = db.add_candidate({'source_id': sid, 'start_time': 0, 'end_time': 6, 'duration': 6,
                                       'candidate_bucket': 'T8', 'candidate_unit': 'T8.3'})
-            db.review(cid, {'decision': 'ACCEPT', 'final_viewpoint': 'third_person'})
+            db.review(cid, {'decision': 'ACCEPT'})
             rules = Mock()
             rules._r9 = lambda facts, bucket: RuleEngine._r9(None, facts, bucket)
             pipeline = MediaPipeline(SimpleNamespace(data_dir=Path(tmp)), db, rules)
@@ -219,7 +219,7 @@ class MediaTests(unittest.TestCase):
     def test_delivery_csv_matches_shared_ledger_columns(self):
         row = {
             "candidate_id": 42, "bucket": "T1", "unit": "T1.1",
-            "viewpoint": "third_person", "created_at": "2026-09-20T10:00:00+00:00",
+            "created_at": "2026-09-20T10:00:00+00:00",
             "exported_at": "2026-09-20T11:00:00+00:00",
             "delivery_unit": "T1.1", "delivery_sequence": 1,
             "delivery_filename": "T1.1_001_城市跑步跟拍.mp4",
@@ -329,7 +329,7 @@ class MediaTests(unittest.TestCase):
             candidate_id, _ = db.add_candidate({"source_id": source_id, "start_time": 0.0, "end_time": 10.0,
                                                 "duration": 10.0, "candidate_bucket": "T7",
                                                 "candidate_unit": "T7.6", "facts": {}})
-            db.review(candidate_id, {"decision": "ACCEPT", "final_viewpoint": "third_person",
+            db.review(candidate_id, {"decision": "ACCEPT",
                                      "delivery_description": "液体界面移动"})
             self.assertEqual(db.get_candidate(candidate_id)["delivery_description"], "液体界面移动")
 

@@ -130,7 +130,6 @@ async function show() {
   $('#queue-meta').textContent = `#${current.id} · ${globalPosition} / ${reviewTotal} · 本页 ${index + 1} / ${queue.length} · 分数 ${Number(current.score).toFixed(0)}`;
   $('#bucket').value = current.candidate_bucket || '';
   fillUnits(current.candidate_unit || '');
-  $('#viewpoint').value = current.candidate_viewpoint || '';
   $('#notes').value = '';
   $('#description').value = current.delivery_description || '';
   renderTrim();
@@ -288,13 +287,8 @@ $('#close-drawer').onclick = () => $('#drawer').classList.remove('open');
 
 async function decide(decision, confirmHard = false) {
   if (!current) return;
-  if (decision === 'ACCEPT' && !['first_person', 'third_person'].includes($('#viewpoint').value)) {
-    notice('请先选择第一人称或第三人称，再提交接受。', true);
-    $('#viewpoint').focus();
-    return;
-  }
   const payload = {decision, final_bucket: $('#bucket').value || null, final_unit: $('#unit').value || null,
-    final_viewpoint: $('#viewpoint').value || null, delivery_description: $('#description').value || null,
+    delivery_description: $('#description').value || null,
     notes: $('#notes').value,
     manual_rule_overrides: {}, confirm_hard_fail: confirmHard};
   try {
@@ -305,7 +299,6 @@ async function decide(decision, confirmHard = false) {
     } else {
       current.candidate_bucket = payload.final_bucket;
       current.candidate_unit = payload.final_unit;
-      current.candidate_viewpoint = payload.final_viewpoint;
       notice('标签已保存，候选仍在审核队列。');
       if ((reviewBucket && reviewBucket !== payload.final_bucket) || (reviewUnit && reviewUnit !== payload.final_unit)) {
         await loadQueue(reviewPage, index);

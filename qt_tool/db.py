@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS candidate_shots (
   proxy_path TEXT,
   candidate_bucket TEXT,
   candidate_unit TEXT,
-  candidate_viewpoint TEXT,
+  candidate_viewpoint TEXT, -- kept for existing databases, no longer used
   material_type TEXT,
   duration_bucket TEXT,
   delivery_description TEXT,
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   decision TEXT NOT NULL,
   final_bucket TEXT,
   final_unit TEXT,
-  final_viewpoint TEXT,
+  final_viewpoint TEXT, -- kept for existing databases, no longer used
   notes TEXT,
   manual_rule_overrides TEXT NOT NULL DEFAULT '{}',
   reviewed_at TEXT NOT NULL
@@ -465,11 +465,11 @@ class Database:
                 return int(row["id"]), False
             cur = con.execute(
                 """INSERT INTO candidate_shots
-                (source_id,start_time,end_time,duration,proxy_path,candidate_bucket,candidate_unit,candidate_viewpoint,
+                (source_id,start_time,end_time,duration,proxy_path,candidate_bucket,candidate_unit,
                  material_type,duration_bucket,score,status,representative_hash,facts_json,created_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (data["source_id"], data["start_time"], data["end_time"], data["duration"], data.get("proxy_path"),
-                 data.get("candidate_bucket"), data.get("candidate_unit"), data.get("candidate_viewpoint"),
+                 data.get("candidate_bucket"), data.get("candidate_unit"),
                  data.get("material_type"), data.get("duration_bucket"), data.get("score", 0),
                  data.get("status", "WAITING_REVIEW"), data.get("representative_hash"),
                  json.dumps(data.get("facts", {}), ensure_ascii=False), now()))
@@ -646,21 +646,18 @@ class Database:
         decision = payload["decision"].upper()
         if decision not in {"ACCEPT", "REJECT", "RESTORE"}:
             raise ValueError("decision 必须是 ACCEPT、REJECT 或 RESTORE")
-        if decision == "ACCEPT" and payload.get("final_viewpoint") not in {"first_person", "third_person"}:
-            raise ValueError("请先选择第一人称或第三人称，再提交接受")
         new_status = {"ACCEPT": "ACCEPTED", "REJECT": "REJECTED", "RESTORE": "WAITING_REVIEW"}[decision]
         with self.connect() as con:
             cur = con.execute(
-                """INSERT INTO reviews(candidate_id,decision,final_bucket,final_unit,final_viewpoint,notes,manual_rule_overrides,reviewed_at)
-                   VALUES(?,?,?,?,?,?,?,?)""",
-                (candidate_id, decision, payload.get("final_bucket"), payload.get("final_unit"), payload.get("final_viewpoint"),
+                """INSERT INTO reviews(candidate_id,decision,final_bucket,final_unit,notes,manual_rule_overrides,reviewed_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (candidate_id, decision, payload.get("final_bucket"), payload.get("final_unit"),
                  payload.get("notes", ""), json.dumps(payload.get("manual_rule_overrides", {}), ensure_ascii=False), now()))
             con.execute("""UPDATE candidate_shots
                            SET status=?,candidate_bucket=COALESCE(?,candidate_bucket),candidate_unit=COALESCE(?,candidate_unit),
-                               candidate_viewpoint=COALESCE(?,candidate_viewpoint),
                                delivery_description=COALESCE(?,delivery_description)
                            WHERE id=?""",
-                        (new_status, payload.get("final_bucket"), payload.get("final_unit"), payload.get("final_viewpoint"),
+                        (new_status, payload.get("final_bucket"), payload.get("final_unit"),
                          str(payload.get("delivery_description") or "").strip() or None, candidate_id))
             return int(cur.lastrowid)
 
@@ -688,9 +685,9 @@ class Database:
 
     def quota_state(self) -> list[dict[str, Any]]:
         with self.connect() as con:
-            rows = con.execute("""SELECT candidate_bucket bucket,candidate_viewpoint viewpoint,duration_bucket,COUNT(*) count
+            rows = con.execute("""SELECT candidate_bucket bucket,duration_bucket,COUNT(*) count
                                   FROM candidate_shots WHERE status IN ('ACCEPTED','FINAL_DOWNLOADING','FINAL_READY','FINAL_QA','DELIVERABLE')
-                                  GROUP BY candidate_bucket,candidate_viewpoint,duration_bucket""").fetchall()
+                                  GROUP BY candidate_bucket,duration_bucket""").fetchall()
         return [dict(r) for r in rows]
 
     def create_final_clip(self, candidate_id: int, **fields: Any) -> int:
@@ -772,7 +769,7 @@ class Database:
     def delivery_rows(self) -> list[dict[str, Any]]:
         with self.connect() as con:
             rows = con.execute("""SELECT c.id candidate_id,c.candidate_bucket bucket,c.candidate_unit unit,
-                c.candidate_viewpoint viewpoint,c.start_time,c.end_time,c.duration candidate_duration,c.duration_bucket,
+                c.start_time,c.end_time,c.duration candidate_duration,c.duration_bucket,
                 c.delivery_description,
                 s.url source_url,s.platform,s.video_id,s.title source_title,
                 f.final_path,f.delivery_unit,f.delivery_sequence,f.delivery_filename,
@@ -780,5 +777,5 @@ class Database:
                 f.created_at,f.exported_at,
                 (SELECT notes FROM reviews r WHERE r.candidate_id=c.id ORDER BY r.id DESC LIMIT 1) notes
                 FROM final_clips f JOIN candidate_shots c ON c.id=f.candidate_id JOIN sources s ON s.id=c.source_id
-                WHERE f.qa_status='PASS' ORDER BY c.candidate_bucket,c.candidate_viewpoint,c.id""").fetchall()
+                WHERE f.qa_status='PASS' ORDER BY c.candidate_bucket,c.id""").fetchall()
             return [dict(r) for r in rows]

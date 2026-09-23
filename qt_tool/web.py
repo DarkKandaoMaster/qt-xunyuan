@@ -303,22 +303,18 @@ class Handler(BaseHTTPRequestHandler):
             self._error(exc)
 
     def _quota(self) -> list[dict[str, Any]]:
-        actual = {(r["bucket"], r["viewpoint"], r["duration_bucket"]): r["count"] for r in self.app.db.quota_state()}
+        actual = {(r["bucket"], r["duration_bucket"]): r["count"] for r in self.app.db.quota_state()}
         result = []
         for bucket, cfg in self.app.rules.buckets.items():
             total = cfg["target_total"]
             row = {"bucket": bucket, "name": cfg["name"], "target": total,
-                   "first_person": {"actual": sum(v for (b, p, _), v in actual.items() if b == bucket and p == "first_person"), "target": cfg["first_person"]},
-                   "third_person": {"actual": sum(v for (b, p, _), v in actual.items() if b == bucket and p == "third_person"), "target": cfg["third_person"]},
-                   "duration": {d: {"actual": sum(v for (b, _, db), v in actual.items() if b == bucket and db == d),
+                   "total": {"actual": sum(v for (b, _), v in actual.items() if b == bucket), "target": total},
+                   "duration": {d: {"actual": sum(v for (b, db), v in actual.items() if b == bucket and db == d),
                                      "recommended": round(total * ratio), "minimum": round(total * .2)}
                                 for d, ratio in {"short": .4, "medium": .35, "long": .25}.items()}}
-            gaps = [
-                (cfg["first_person"] - row["first_person"]["actual"], "第一人称"),
-                (cfg["third_person"] - row["third_person"]["actual"], "第三人称"),
-                *[(row["duration"][d]["recommended"] - row["duration"][d]["actual"], {"short": "短档", "medium": "中档", "long": "长档"}[d]) for d in ("short", "medium", "long")],
-            ]
-            row["largest_gap"] = max(gaps)[1]
+            gaps = [(row["duration"][d]["recommended"] - row["duration"][d]["actual"], {"short": "短档", "medium": "中档", "long": "长档"}[d])
+                    for d in ("short", "medium", "long")]
+            row["largest_gap"] = "已达标" if row["total"]["actual"] >= total else max(gaps)[1]
             result.append(row)
         return result
 

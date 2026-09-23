@@ -901,8 +901,8 @@ class MediaPipeline:
         candidate = self.db.get_candidate(candidate_id)
         if not candidate:
             raise KeyError("候选不存在")
-        if not candidate.get("candidate_bucket") or not candidate.get("candidate_unit") or candidate.get("candidate_viewpoint") not in {"first_person", "third_person"}:
-            raise ValueError("最终处理前必须由人工确认桶、单元和人称")
+        if not candidate.get("candidate_bucket") or not candidate.get("candidate_unit"):
+            raise ValueError("最终处理前必须由人工确认桶和单元")
         original = self.download_final(int(candidate["source_id"]))
         candidate = self.db.get_candidate(candidate_id) or candidate
         source_info = self.probe(original)
