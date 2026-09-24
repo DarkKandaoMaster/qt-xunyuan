@@ -191,6 +191,54 @@ def source_live_reason(metadata: dict[str, Any]) -> str | None:
     return None
 
 
+# 标题命中即不入库。与 rules/search_templates.yaml 的 defaults.negative 合并使用。
+BUILTIN_NEGATIVE_TERMS = (
+    "cinematic", "b-roll", "broll", "walking tour", "4k walk", "pov", "gopro", "fpv", "insta360",
+    # 只挡头盔机位，不挡画面里戴头盔的工人/骑手
+    "helmet cam", "helmetcam", "helmet camera", "helmet view",
+    "onboard", "dashcam", "dash cam", "first person", "timelapse", "time lapse", "hyperlapse",
+    "slow motion", "slowmo", "how to", "tutorial", "vlog", "review", "compilation",
+    "montage", "shorts", "reaction", "gameplay",
+)
+# 单元级豁免：这些单元允许标题里出现对应词。
+NEGATIVE_EXEMPTIONS = {"T8.4": ("slow motion", "slowmo")}
+
+def _normalize_words(text: str) -> str:
+    return " ".join(re.sub(r"[-_#|/]+", " ", str(text or "").lower()).split())
+
+
+def load_negative_terms(templates_path: Path | str | None) -> list[str]:
+    """defaults.negative from search_templates.yaml (JSON syntax) merged with the built-in avoid list."""
+    terms: list[str] = []
+    if templates_path:
+        try:
+            data = json.loads(Path(templates_path).read_text(encoding="utf-8"))
+            terms.extend(str(t) for t in ((data.get("defaults") or {}).get("negative") or []) if str(t).strip())
+        except (OSError, ValueError, AttributeError):
+            pass
+    terms.extend(BUILTIN_NEGATIVE_TERMS)
+    seen: dict[str, None] = {}
+    for term in terms:
+        seen.setdefault(_normalize_words(term), None)
+    return [t for t in seen if t]
+
+
+def negative_terms_for(terms: list[str] | tuple[str, ...], target_unit: str | None) -> list[str]:
+    exempt = {_normalize_words(t) for t in NEGATIVE_EXEMPTIONS.get(str(target_unit or ""), ())}
+    return [t for t in terms if _normalize_words(t) not in exempt]
+
+
+def _term_in(normalized_text: str, term: str) -> bool:
+    word = _normalize_words(term)
+    return bool(word) and re.search(r"(?<![a-z0-9])" + re.escape(word), normalized_text) is not None
+
+
+def negative_hit(text: str, terms: list[str] | tuple[str, ...]) -> str | None:
+    """Return the first avoid-term found in ``text`` (case-insensitive, word-start match)."""
+    normalized = f" {_normalize_words(text)}"
+    return next((term for term in terms if _term_in(normalized, term)), None)
+
+
 def platform_of(item: dict[str, Any]) -> str:
     """Flat 结果常缺 extractor_key，只有 ie_key 或 URL，也要认成 youtube。"""
     extractor = str(item.get("extractor_key") or item.get("extractor") or item.get("ie_key") or "").lower()
@@ -270,7 +318,8 @@ def tool_status(settings: Settings) -> dict[str, bool]:
     }
 
 
-def source_score(metadata: dict[str, Any], target_unit: str | None, query: str, gap_boost: float = 0) -> float:
+def source_score(metadata: dict[str, Any], target_unit: str | None, query: str, gap_boost: float = 0,
+                 negatives: list[str] | tuple[str, ...] | None = None) -> float:
     title = str(metadata.get("title", "")).lower()
     description = str(metadata.get("description", "")).lower()
     text = f"{title} {description}"
@@ -280,8 +329,9 @@ def source_score(metadata: dict[str, Any], target_unit: str | None, query: str, 
     quality = 20.0 if height >= 2160 else 14.0 if height >= 1440 else 7.0 if height >= 1080 else 0.0
     duration = float(metadata.get("duration") or 0)
     duration_score = 15.0 if duration >= 30 else 10.0 if duration >= 15 else 4.0 if duration >= 5 else -40.0
-    negatives = ("montage", "compilation", "gameplay", "shorts", "reaction")
-    penalty = sum(18.0 for word in negatives if word in text)
+    terms = negative_terms_for(BUILTIN_NEGATIVE_TERMS if negatives is None else negatives, target_unit)
+    normalized = f" {_normalize_words(text)}"
+    penalty = sum(18.0 for word in terms if _term_in(normalized, word))
     unit_bonus = 8.0 if target_unit else 0.0
     return max(0.0, min(100.0, 20 + relevance + quality + duration_score + unit_bonus + gap_boost - penalty))
 
@@ -375,6 +425,12 @@ class MediaPipeline:
         command.extend(args)
         return command
 
+    @property
+    def negative_terms(self) -> list[str]:
+        if getattr(self, "_negative_terms", None) is None:
+            self._negative_terms = load_negative_terms(getattr(self.settings, "search_templates_path", None))
+        return self._negative_terms
+
     def discover(self, query: str, target_unit: str | None = None, limit: int = 10) -> dict[str, int]:
         if not _command_exists(self.settings.ytdlp_bin):
             raise ToolMissing("未找到 yt-dlp；安装后才能自动搜索公开来源，也可先手工导入 URL。")
@@ -386,13 +442,17 @@ class MediaPipeline:
         payload = json.loads(proc.stdout)
         self.db.add_traffic("metadata", len(proc.stdout.encode("utf-8")))
         entries = payload.get("entries") or []
-        found = created = excluded = excluded_live = 0
+        terms = negative_terms_for(self.negative_terms, target_unit)
+        found = created = excluded = excluded_live = filtered = 0
         for entry in entries:
             if not entry:
                 continue
             found += 1
             url = entry.get("webpage_url") or entry.get("url")
             if not url:
+                continue
+            if negative_hit(str(entry.get("title") or ""), terms):
+                filtered += 1
                 continue
             metadata = self._normalize_ytdlp(entry, query, target_unit)
             if source_live_reason(metadata.get("metadata") or metadata):
@@ -404,8 +464,8 @@ class MediaPipeline:
                 continue
             _, is_new = self.db.add_source(metadata)
             created += int(is_new)
-        return {"found": found, "created": created, "excluded": excluded, "excluded_live": excluded_live,
-                "max_duration_seconds": self.settings.source_max_duration_seconds}
+        return {"found": found, "created": created, "filtered": filtered, "excluded": excluded,
+                "excluded_live": excluded_live, "max_duration_seconds": self.settings.source_max_duration_seconds}
 
     def import_url(self, url: str, target_unit: str | None = None) -> tuple[int, bool]:
         if _command_exists(self.settings.ytdlp_bin):
@@ -444,7 +504,7 @@ class MediaPipeline:
             "metadata": item,
             "status": "METADATA_READY",
         }
-        result["source_score"] = source_score(item, target_unit, query)
+        result["source_score"] = source_score(item, target_unit, query, negatives=self.negative_terms)
         return result
 
     def validate_proxy_source(self, source_id: int) -> dict[str, Any]:

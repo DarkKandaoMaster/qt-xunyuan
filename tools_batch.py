@@ -10,6 +10,7 @@
 
 单元可以写完整子单元（T7.4）或整桶（T7）。产出全部写入同一个 `data/qt_tool.sqlite3`，
 人工审核仍然在网页 http://127.0.0.1:8765/review 完成；网页和命令行可以同时运行。
+标题命中负面词（search_templates.yaml defaults.negative + 内置避开词）的结果计入 filtered，不入库。
 """
 from __future__ import annotations
 
