@@ -130,6 +130,28 @@ class ProxyTests(unittest.TestCase):
         quietly(lambda: runner.proxy("T7.4"))
         pipeline.download_proxy.assert_called_once_with(2, allow_unknown=False)
 
+    def test_min_id_skips_older_sources_before_top_is_applied(self):
+        rows = [source(i) for i in (3, 8, 12, 15)]
+        runner, pipeline, _ = make_runner(rows)
+        pipeline.preflight_source.return_value = {"status": "FAIL", "reason": "分辨率不足"}
+        totals, output = quietly(lambda: runner.proxy("T7.4", top=2, min_source_id=8))
+        self.assertEqual(totals["selected"], 2)
+        self.assertEqual([c.args[0] for c in pipeline.preflight_source.call_args_list], [8, 12])
+        self.assertIn("id ≥ 8", output)
+        args = tools_batch.build_parser().parse_args(["proxy", "T7.4", "--min-id", "1500"])
+        self.assertEqual(args.min_id, 1500)
+        self.assertEqual(tools_batch.build_parser().parse_args(["proxy", "T7.4"]).min_id, 0)
+
+
+class LogTests(unittest.TestCase):
+    def test_log_replaces_characters_the_console_cannot_encode(self):
+        raw = io.BytesIO()
+        console = io.TextIOWrapper(raw, encoding="gbk", errors="strict")
+        with redirect_stdout(console):
+            tools_batch.log("跟拍 \U0001F600 done")
+        console.flush()
+        self.assertIn("跟拍 ? done", raw.getvalue().decode("gbk"))
+
 
 class AnalyzeTests(unittest.TestCase):
     def test_only_downloaded_but_unanalyzed_sources_are_analyzed(self):

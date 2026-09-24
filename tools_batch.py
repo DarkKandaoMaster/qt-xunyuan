@@ -3,7 +3,7 @@
 用法（在仓库根目录运行）：
     python tools_batch.py discover T7.4 [--queries 6] [--limit 10]
     python tools_batch.py channel  T6.6 https://www.youtube.com/@handle/videos [--limit 60]
-    python tools_batch.py proxy    T7.4 [--top 20] [--allow-unknown]
+    python tools_batch.py proxy    T7.4 [--top 20] [--allow-unknown] [--min-id 1500]
     python tools_batch.py analyze  T7.4
     python tools_batch.py run      T7.4 [--queries 6] [--limit 10] [--top 20]
     python tools_batch.py status   [T7.4]
@@ -36,7 +36,12 @@ NON_COUNT_KEYS = {"max_duration_seconds"}
 
 
 def log(message: str) -> None:
-    print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
+    line = f"[{time.strftime('%H:%M:%S')}] {message}"
+    try:
+        print(line, flush=True)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        print(line.encode(encoding, errors="replace").decode(encoding), flush=True)
 
 
 def one_line(value: Any, limit: int = 200) -> str:
@@ -127,11 +132,14 @@ class BatchRunner:
         log(f"channel 汇总 {unit}：{json.dumps(totals, ensure_ascii=False)}")
         return totals
 
-    def proxy(self, unit: str, top: int = 20, allow_unknown: bool = False) -> dict[str, int]:
-        pending = [s for s in self.sources(unit) if not s.get("proxy_path")][:max(0, top)]
+    def proxy(self, unit: str, top: int = 20, allow_unknown: bool = False,
+              min_source_id: int = 0) -> dict[str, int]:
+        pending = [s for s in self.sources(unit)
+                   if not s.get("proxy_path") and int(s.get("id") or 0) >= max(0, min_source_id)][:max(0, top)]
         totals = {"selected": len(pending), "downloaded": 0, "skipped_preflight_fail": 0,
                   "skipped_preflight_unknown": 0, "failed": 0}
-        log(f"proxy {unit}：未下载代理的来源按分数取前 {top}，本次处理 {len(pending)} 条")
+        scope = f"，只看 id ≥ {min_source_id} 的来源" if min_source_id else ""
+        log(f"proxy {unit}：未下载代理的来源按分数取前 {top}{scope}，本次处理 {len(pending)} 条")
         for source in pending:
             source_id = int(source["id"])
             log(f"#{source_id} {str(source.get('title') or '')[:60]}")
@@ -281,6 +289,7 @@ def build_parser() -> argparse.ArgumentParser:
     proxy.add_argument("unit")
     proxy.add_argument("--top", type=int, default=20, help="按 source_score 降序取前 N 条，默认 20")
     proxy.add_argument("--allow-unknown", action="store_true", help="规格预检为 UNKNOWN 时仍然下载")
+    proxy.add_argument("--min-id", type=int, default=0, help="只处理 id 不小于该值的来源（例如只补跑本次新入库的来源）")
 
     analyze = sub.add_parser("analyze", help="对已有代理且未分析的来源做镜头分析")
     analyze.add_argument("unit")
@@ -311,7 +320,8 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "channel":
         runner.channel(check_unit(args.unit), args.url, limit=args.limit)
     elif args.command == "proxy":
-        runner.proxy(check_unit(args.unit), top=args.top, allow_unknown=args.allow_unknown)
+        runner.proxy(check_unit(args.unit), top=args.top, allow_unknown=args.allow_unknown,
+                     min_source_id=args.min_id)
     elif args.command == "analyze":
         runner.analyze(check_unit(args.unit))
     else:
