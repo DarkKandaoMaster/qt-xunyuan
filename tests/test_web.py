@@ -203,5 +203,70 @@ class CandidateFilterHTTPTests(unittest.TestCase):
         self.assertIn("T2.2", rules["units"])
 
 
+class SourceRejectHTTPTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        app = App.__new__(App)
+        app.db = Database(Path(self.tmp.name) / "test.sqlite3")
+        app.settings = SimpleNamespace(root=ROOT)
+        app.rules = RuleEngine(ROOT / "rules/qt_rules_v4.yaml", ROOT / "rules/conflicts.yaml")
+        self.db = app.db
+        self.source_a, _ = app.db.add_source({"platform": "test", "video_id": "a", "url": "https://example.test/a"})
+        self.source_b, _ = app.db.add_source({"platform": "test", "video_id": "b", "url": "https://example.test/b"})
+        self.ids = {}
+        for index, (name, source, status) in enumerate([
+                ("a_wait1", self.source_a, "WAITING_REVIEW"), ("a_wait2", self.source_a, "WAITING_REVIEW"),
+                ("a_accepted", self.source_a, "ACCEPTED"), ("a_rejected", self.source_a, "REJECTED"),
+                ("b_wait", self.source_b, "WAITING_REVIEW")]):
+            self.ids[name], _ = app.db.add_candidate({
+                "source_id": source, "start_time": index * 10, "end_time": index * 10 + 10, "duration": 10,
+                "candidate_bucket": "T1", "candidate_unit": "T1.1", "status": status})
+        handler = type("TestHandler", (Handler,), {"app": app, "log_message": lambda *args: None})
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        self.addCleanup(self.server.server_close)
+        thread = Thread(target=self.server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(self.server.shutdown)
+
+    def post(self, path, body):
+        connection = HTTPConnection(*self.server.server_address, timeout=5)
+        try:
+            connection.request("POST", path, body=json.dumps(body).encode("utf-8"),
+                               headers={"Content-Type": "application/json"})
+            response = connection.getresponse()
+            return response.status, json.loads(response.read().decode("utf-8"))
+        finally:
+            connection.close()
+
+    def status_of(self, name):
+        return self.db.get_candidate(self.ids[name])["status"]
+
+    def latest_notes(self, name):
+        with self.db.connect() as con:
+            return con.execute("SELECT notes FROM reviews WHERE candidate_id=? ORDER BY id DESC LIMIT 1",
+                               (self.ids[name],)).fetchone()["notes"]
+
+    def test_only_waiting_candidates_of_that_source_are_rejected(self):
+        status, data = self.post(f"/api/sources/{self.source_a}/reject-waiting", {"notes": " 整段远景 "})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["rejected_ids"], [self.ids["a_wait1"], self.ids["a_wait2"]])
+        self.assertEqual(data["count"], 2)
+        self.assertEqual((self.status_of("a_wait1"), self.status_of("a_wait2")), ("REJECTED", "REJECTED"))
+        self.assertEqual(self.status_of("a_accepted"), "ACCEPTED")
+        self.assertEqual(self.status_of("b_wait"), "WAITING_REVIEW")
+        self.assertEqual(self.latest_notes("a_wait2"), "整段远景")
+        status, data = self.post(f"/api/sources/{self.source_a}/reject-waiting", {})
+        self.assertEqual((status, data["count"]), (200, 0))
+
+    def test_notes_are_optional_and_unknown_source_is_404(self):
+        status, data = self.post(f"/api/sources/{self.source_b}/reject-waiting", {})
+        self.assertEqual((status, data["rejected_ids"]), (200, [self.ids["b_wait"]]))
+        self.assertEqual(self.latest_notes("b_wait"), "")
+        status, _ = self.post("/api/sources/99999/reject-waiting", {"notes": "x"})
+        self.assertEqual(status, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

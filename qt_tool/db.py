@@ -165,6 +165,7 @@ CREATE INDEX IF NOT EXISTS idx_sources_status ON sources(status);
 CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidate_shots(status);
 CREATE INDEX IF NOT EXISTS idx_rules_candidate ON rule_results(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_reviews_candidate ON reviews(candidate_id);
 """
 
 
@@ -660,6 +661,21 @@ class Database:
                         (new_status, payload.get("final_bucket"), payload.get("final_unit"),
                          str(payload.get("delivery_description") or "").strip() or None, candidate_id))
             return int(cur.lastrowid)
+
+    def reject_waiting_by_source(self, source_id: int, notes: str) -> list[int]:
+        """Reject every WAITING_REVIEW candidate of one source; other states are untouched."""
+        stamp = now()
+        with self.connect() as con:
+            ids = [int(row["id"]) for row in con.execute(
+                "SELECT id FROM candidate_shots WHERE source_id=? AND status='WAITING_REVIEW' ORDER BY id",
+                (source_id,))]
+            con.executemany(
+                """INSERT INTO reviews(candidate_id,decision,notes,manual_rule_overrides,reviewed_at)
+                   VALUES(?,'REJECT',?,'{}',?)""", [(cid, notes, stamp) for cid in ids])
+            if ids:
+                placeholders = ",".join("?" for _ in ids)
+                con.execute(f"UPDATE candidate_shots SET status='REJECTED' WHERE id IN ({placeholders})", ids)
+            return ids
 
     def add_traffic(self, kind: str, byte_count: int, source_id: int | None = None, direction: str = "download") -> None:
         with self.connect() as con:

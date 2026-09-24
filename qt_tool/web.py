@@ -256,6 +256,12 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("deleted 必须是布尔值")
                 self.app.db.set_source_deleted(int(match.group(1)), data["deleted"])
                 return self._json({"ok": True})
+            if match := re.fullmatch(r"/api/sources/(\d+)/reject-waiting", path):
+                source_id = int(match.group(1))
+                if not self.app.db.get_source(source_id):
+                    raise KeyError("来源不存在")
+                ids = self.app.db.reject_waiting_by_source(source_id, str(data.get("notes") or "").strip())
+                return self._json({"ok": True, "rejected_ids": ids, "count": len(ids)})
             if match := re.fullmatch(r"/api/sources/(\d+)/analysis-state", path):
                 source_id = int(match.group(1))
                 if not self.app.db.get_source(source_id):

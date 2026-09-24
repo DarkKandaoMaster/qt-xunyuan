@@ -153,3 +153,6 @@ video { width: 100%; height: 100%; object-fit: contain; }
 .empty { padding: 40px; text-align: center; color: var(--muted); }
 @media (max-width: 1050px) { .metrics { grid-template-columns: repeat(3, 1fr); } .two-col, .review-layout { grid-template-columns: 1fr; } }
 @media (max-width: 680px) { .page { padding: 12px; } .metrics { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } .quota-row { grid-template-columns: 1fr 1fr; } .drawer { width: 92vw; right: -100vw; } .drawer.open { right: 0; } }
+.source-reject { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.source-reject button { padding: 7px 10px; font-size: 12px; }
+.source-reject span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }

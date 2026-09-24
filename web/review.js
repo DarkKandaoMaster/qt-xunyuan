@@ -99,6 +99,7 @@ async function show() {
     $('#queue-meta').textContent = reviewTotal ? '当前页没有待审核候选' : '当前筛选条件下没有待审核候选';
     $('#rules').innerHTML = '<div class="empty">已处理完毕</div>';
     $('#rules-summary').textContent = '暂无候选';
+    $('#source-reject-meta').textContent = '';
     renderCamera();
     return;
   }
@@ -126,6 +127,7 @@ async function show() {
   $('#source-meta').innerHTML = `<a href="${esc(current.source_url)}" target="_blank" rel="noreferrer">${esc(current.source_title || current.source_url)}</a>`;
   $('#clip-time').textContent = `${current.start_time.toFixed(2)}s → ${current.end_time.toFixed(2)}s · ${current.duration.toFixed(2)}s`;
   $('#candidate-title').textContent = `候选判断 · #${current.id}`;
+  $('#source-reject-meta').textContent = `来源 #${current.source_id}`;
   const globalPosition = (reviewPage - 1) * REVIEW_PAGE_SIZE + index + 1;
   $('#queue-meta').textContent = `#${current.id} · ${globalPosition} / ${reviewTotal} · 本页 ${index + 1} / ${queue.length} · 分数 ${Number(current.score).toFixed(0)}`;
   $('#bucket').value = current.candidate_bucket || '';
@@ -318,8 +320,21 @@ async function saveLabels() {
   await decide('RESTORE');
 }
 
+async function rejectSource() {
+  if (!current) return;
+  const sourceId = current.source_id, notes = $('#notes').value.trim();
+  const title = current.source_title || current.source_url || '该来源';
+  if (!confirm(`将打回来源 #${sourceId}「${title}」下全部待审候选（已接受、已交付的不受影响）。\n备注：${notes || '（无）'}\n\n确定打回？`)) return;
+  try {
+    const data = await api(`/api/sources/${sourceId}/reject-waiting`, {method: 'POST', body: JSON.stringify({notes})});
+    notice(`来源 #${sourceId}：已打回 ${data.count} 条待审候选。`);
+    await loadQueue(reviewPage, index);
+  } catch (error) { notice(error.message, true); }
+}
+
 $('#accept').onclick = () => decide('ACCEPT');
 $('#reject').onclick = () => decide('REJECT');
+$('#reject-source').onclick = rejectSource;
 $('#edit').onclick = saveLabels;
 $('#prev').onclick = () => moveCandidate(-1);
 $('#next').onclick = () => moveCandidate(1);
