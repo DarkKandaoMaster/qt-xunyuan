@@ -191,6 +191,17 @@ def source_live_reason(metadata: dict[str, Any]) -> str | None:
     return None
 
 
+def platform_of(item: dict[str, Any]) -> str:
+    """Flat 结果常缺 extractor_key，只有 ie_key 或 URL，也要认成 youtube。"""
+    extractor = str(item.get("extractor_key") or item.get("extractor") or item.get("ie_key") or "").lower()
+    url = str(item.get("webpage_url") or item.get("original_url") or item.get("url") or "").lower()
+    if "youtube" in extractor or re.match(r"^(?:https?://)?(?:[\w-]+\.)*(?:youtube\.com|youtu\.be)/", url):
+        return "youtube"
+    if "vimeo" in extractor or re.match(r"^(?:https?://)?(?:[\w-]+\.)*vimeo\.com/", url):
+        return "vimeo"
+    return extractor or "unknown"
+
+
 def merge_facts(base_json: str, probe: dict[str, Any], **overrides: Any) -> dict[str, Any]:
     facts = dict(json.loads(base_json or "{}"))
     facts.update(probe)
@@ -411,8 +422,7 @@ class MediaPipeline:
                                    "target_unit": target_unit, "status": "DISCOVERED"})
 
     def _normalize_ytdlp(self, item: dict[str, Any], query: str, target_unit: str | None) -> dict[str, Any]:
-        extractor = str(item.get("extractor_key") or item.get("extractor") or "unknown").lower()
-        platform = "youtube" if "youtube" in extractor else "vimeo" if "vimeo" in extractor else extractor
+        platform = platform_of(item)
         formats = [{k: f.get(k) for k in ("format_id", "ext", "width", "height", "fps", "filesize", "vcodec", "acodec")}
                    for f in (item.get("formats") or [])]
         raw_url = item.get("webpage_url") or item.get("original_url") or item.get("url")
