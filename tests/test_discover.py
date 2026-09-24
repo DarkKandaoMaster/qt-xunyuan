@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import tools_batch
 from qt_tool.db import Database
 from qt_tool.media import (MediaPipeline, load_negative_terms, negative_hit, negative_terms_for,
-                           platform_of, source_score)
+                           platform_of, source_score, youtube_channel_url)
 
 
 def flat_entry(video_id: str, title: str, duration: float | None = 60) -> dict:
@@ -53,6 +56,21 @@ class NegativeTermTests(unittest.TestCase):
         self.assertEqual(clean - penalised, 36.0)
         custom = source_score(dict(base, description="lyrics"), "T6.8", "man walking", negatives=["lyrics"])
         self.assertEqual(clean - custom, 18.0)
+
+
+class ChannelUrlTests(unittest.TestCase):
+    def test_channel_urls_are_recognised_and_normalised(self):
+        self.assertEqual(youtube_channel_url("https://www.youtube.com/@21Aerials/videos"),
+                         "https://www.youtube.com/@21Aerials/videos")
+        self.assertEqual(youtube_channel_url("https://youtube.com/@Mediame"),
+                         "https://www.youtube.com/@Mediame/videos")
+        self.assertEqual(youtube_channel_url("https://www.youtube.com/channel/UC1234abcd_-X/videos"),
+                         "https://www.youtube.com/channel/UC1234abcd_-X/videos")
+        self.assertEqual(youtube_channel_url("youtube.com/c/Knot9/featured"),
+                         "https://www.youtube.com/c/Knot9/videos")
+        self.assertIsNone(youtube_channel_url("https://www.youtube.com/watch?v=abc"))
+        self.assertIsNone(youtube_channel_url("https://www.youtube.com/@Mediame/playlists"))
+        self.assertIsNone(youtube_channel_url("man walking up stairs"))
 
 
 class PlatformTests(unittest.TestCase):
@@ -100,6 +118,47 @@ class PipelineDiscoverTests(unittest.TestCase):
                           stats["excluded_live"]), (5, 1, 2, 2, 1))
         source = self.db.list_sources(limit=10, view="all")[0]
         self.assertEqual((source["platform"], source["video_id"]), ("youtube", "a1"))
+
+    def test_channel_listing_uses_same_filters(self):
+        entries = [flat_entry("c1", "Aerial view of hikers on ridge"),
+                   flat_entry("c2", "FPV drone dive"),
+                   flat_entry("c3", "Coastline flyover", duration=900)]
+        run_patch, exists_patch = self._run_with(entries)
+        with run_patch as run, exists_patch:
+            stats = self.pipeline.discover_channel("https://www.youtube.com/@21Aerials", "T6.6", 10)
+        command = run.call_args.args[0]
+        self.assertEqual(command[-1], "https://www.youtube.com/@21Aerials/videos")
+        self.assertEqual(command[command.index("--playlist-end") + 1], "10")
+        self.assertEqual((stats["found"], stats["created"], stats["filtered"], stats["excluded"]), (3, 1, 1, 1))
+        source = self.db.list_sources(limit=10, view="all")[0]
+        self.assertEqual(source["platform"], "youtube")
+        self.assertEqual(source["search_query"], "channel:https://www.youtube.com/@21Aerials/videos")
+
+    def test_discover_with_channel_url_delegates_and_bad_url_is_rejected(self):
+        self.pipeline.discover_channel = Mock(return_value={"found": 0})
+        self.pipeline.discover("https://www.youtube.com/@Mediame/videos", "T6.6", 30)
+        self.pipeline.discover_channel.assert_called_once_with("https://www.youtube.com/@Mediame/videos", "T6.6", 30)
+        with self.assertRaises(ValueError):
+            MediaPipeline.discover_channel(self.pipeline, "https://www.youtube.com/watch?v=x", "T6.6", 5)
+
+
+class BatchCliTests(unittest.TestCase):
+    def test_discover_sums_filtered_and_channel_subcommand_parses(self):
+        pipeline = Mock()
+        pipeline.discover.return_value = {"found": 3, "created": 1, "filtered": 2}
+        pipeline.discover_channel.return_value = {"found": 5, "created": 2, "filtered": 1,
+                                                  "channel": "https://www.youtube.com/@x/videos"}
+        runner = tools_batch.BatchRunner(pipeline, Mock(), {"T6.8": ["q1", "q2"]})
+        with redirect_stdout(io.StringIO()):
+            totals = runner.discover("T6.8", queries=2, limit=4)
+            channel_totals = runner.channel("T6.8", "https://www.youtube.com/@x", limit=7)
+        self.assertEqual(pipeline.discover.call_args.args, ("q2", "T6.8", 4))
+        self.assertEqual(totals["filtered"], 4)
+        pipeline.discover_channel.assert_called_once_with("https://www.youtube.com/@x", "T6.8", 7)
+        self.assertEqual(channel_totals, {"found": 5, "created": 2, "filtered": 1})
+        parser = tools_batch.build_parser()
+        args = parser.parse_args(["channel", "T6.6", "https://www.youtube.com/@21Aerials/videos"])
+        self.assertEqual((args.unit, args.url, args.limit), ("T6.6", "https://www.youtube.com/@21Aerials/videos", 60))
 
 
 if __name__ == "__main__":

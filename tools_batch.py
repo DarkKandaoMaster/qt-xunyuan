@@ -2,6 +2,7 @@
 
 用法（在仓库根目录运行）：
     python tools_batch.py discover T7.4 [--queries 6] [--limit 10]
+    python tools_batch.py channel  T6.6 https://www.youtube.com/@handle/videos [--limit 60]
     python tools_batch.py proxy    T7.4 [--top 20] [--allow-unknown]
     python tools_batch.py analyze  T7.4
     python tools_batch.py run      T7.4 [--queries 6] [--limit 10] [--top 20]
@@ -82,6 +83,15 @@ def _scope(column: str, unit: str | None) -> tuple[str, list[Any]]:
     return f"({column}=? OR {column} LIKE ?)", [unit, f"{unit}.%"]
 
 
+def add_counts(totals: dict[str, int], stats: dict[str, Any] | None) -> None:
+    """累加 discover 返回的计数项并打印一行明细；配置回显和字符串不累加。"""
+    for key, value in (stats or {}).items():
+        if key in NON_COUNT_KEYS or isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        totals[key] = totals.get(key, 0) + int(value)
+    log("  " + "，".join(f"{key} {value}" for key, value in (stats or {}).items()))
+
+
 class BatchRunner:
     def __init__(self, pipeline: MediaPipeline, db: Database, templates: dict[str, list[str]]):
         self.pipeline = pipeline
@@ -105,12 +115,16 @@ class BatchRunner:
                 log(f"  搜索失败：{one_line(exc)}")
                 continue
             totals["queries"] += 1
-            for key, value in (stats or {}).items():
-                if key in NON_COUNT_KEYS or isinstance(value, bool) or not isinstance(value, (int, float)):
-                    continue
-                totals[key] = totals.get(key, 0) + int(value)
-            log("  " + "，".join(f"{key} {value}" for key, value in (stats or {}).items()))
+            add_counts(totals, stats)
         log(f"discover 汇总 {unit}：{json.dumps(totals, ensure_ascii=False)}")
+        return totals
+
+    def channel(self, unit: str, url: str, limit: int = 60) -> dict[str, int]:
+        log(f"channel {unit}：{url}，最多列出 {limit} 条")
+        stats = self.pipeline.discover_channel(url, unit, limit)
+        totals: dict[str, int] = {}
+        add_counts(totals, stats)
+        log(f"channel 汇总 {unit}：{json.dumps(totals, ensure_ascii=False)}")
         return totals
 
     def proxy(self, unit: str, top: int = 20, allow_unknown: bool = False) -> dict[str, int]:
@@ -258,6 +272,11 @@ def build_parser() -> argparse.ArgumentParser:
     discover.add_argument("--queries", type=int, default=6, help="使用该单元的前 N 条搜索词，默认 6")
     discover.add_argument("--limit", type=int, default=10, help="每条搜索词最多取回多少结果，默认 10")
 
+    channel = sub.add_parser("channel", help="整拉一个 YouTube 频道的视频元数据（负面词/时长/直播过滤照旧）")
+    channel.add_argument("unit")
+    channel.add_argument("url", help="https://www.youtube.com/@handle/videos 或 /channel/ID/videos")
+    channel.add_argument("--limit", type=int, default=60, help="最多列出频道最新的 N 个视频，默认 60")
+
     proxy = sub.add_parser("proxy", help="按分数批量下载代理")
     proxy.add_argument("unit")
     proxy.add_argument("--top", type=int, default=20, help="按 source_score 降序取前 N 条，默认 20")
@@ -289,6 +308,8 @@ def main(argv: list[str] | None = None) -> int:
         runner.status(check_unit(args.unit) if args.unit else None)
     elif args.command == "discover":
         runner.discover(check_unit(args.unit), queries=args.queries, limit=args.limit)
+    elif args.command == "channel":
+        runner.channel(check_unit(args.unit), args.url, limit=args.limit)
     elif args.command == "proxy":
         runner.proxy(check_unit(args.unit), top=args.top, allow_unknown=args.allow_unknown)
     elif args.command == "analyze":

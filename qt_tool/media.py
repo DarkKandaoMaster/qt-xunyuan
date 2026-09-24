@@ -203,6 +203,11 @@ BUILTIN_NEGATIVE_TERMS = (
 # 单元级豁免：这些单元允许标题里出现对应词。
 NEGATIVE_EXEMPTIONS = {"T8.4": ("slow motion", "slowmo")}
 
+_CHANNEL_URL = re.compile(
+    r"^(?:https?://)?(?:www\.|m\.)?youtube\.com/(?P<path>@[\w.\-%]+|channel/[\w\-]+|c/[\w.\-%]+|user/[\w.\-%]+)"
+    r"(?P<tab>/[\w\-]*)?/?(?:[?#].*)?$", re.I)
+
+
 def _normalize_words(text: str) -> str:
     return " ".join(re.sub(r"[-_#|/]+", " ", str(text or "").lower()).split())
 
@@ -237,6 +242,17 @@ def negative_hit(text: str, terms: list[str] | tuple[str, ...]) -> str | None:
     """Return the first avoid-term found in ``text`` (case-insensitive, word-start match)."""
     normalized = f" {_normalize_words(text)}"
     return next((term for term in terms if _term_in(normalized, term)), None)
+
+
+def youtube_channel_url(url: str) -> str | None:
+    """Normalize a YouTube channel URL to its /videos tab; None when ``url`` is not a channel."""
+    match = _CHANNEL_URL.match(str(url or "").strip())
+    if not match:
+        return None
+    tab = (match.group("tab") or "").strip("/").lower()
+    if tab and tab not in {"videos", "featured"}:
+        return None
+    return f"https://www.youtube.com/{match.group('path')}/videos"
 
 
 def platform_of(item: dict[str, Any]) -> str:
@@ -431,14 +447,34 @@ class MediaPipeline:
             self._negative_terms = load_negative_terms(getattr(self.settings, "search_templates_path", None))
         return self._negative_terms
 
-    def discover(self, query: str, target_unit: str | None = None, limit: int = 10) -> dict[str, int]:
+    def discover(self, query: str, target_unit: str | None = None, limit: int = 10) -> dict[str, Any]:
+        """搜索入库；query 本身是 YouTube 频道 URL 时改为整拉频道。"""
+        if youtube_channel_url(query):
+            return self.discover_channel(query, target_unit, limit)
         if not _command_exists(self.settings.ytdlp_bin):
             raise ToolMissing("未找到 yt-dlp；安装后才能自动搜索公开来源，也可先手工导入 URL。")
         target = f"ytsearch{max(1, min(limit, 50))}:{query}"
-        proc = _run(self._ytdlp("--dump-single-json", "--flat-playlist", "--skip-download",
-                                "--ignore-errors", "--no-warnings", target), timeout=300)
+        return self._ingest_listing(["--dump-single-json", "--flat-playlist", "--skip-download",
+                                     "--ignore-errors", "--no-warnings", target], query, query, target_unit, "搜索")
+
+    def discover_channel(self, url: str, target_unit: str | None = None, limit: int = 60) -> dict[str, Any]:
+        """Flat-list a channel's uploads and ingest them with the same negative/duration/live filters."""
+        channel = youtube_channel_url(url)
+        if not channel:
+            raise ValueError(f"不是 YouTube 频道地址：{url}（应形如 https://www.youtube.com/@handle/videos）")
+        if not _command_exists(self.settings.ytdlp_bin):
+            raise ToolMissing("未找到 yt-dlp；安装后才能拉取频道。")
+        args = ["--dump-single-json", "--flat-playlist", "--skip-download", "--ignore-errors", "--no-warnings",
+                "--playlist-end", str(max(1, limit)), channel]
+        stats = self._ingest_listing(args, f"channel:{channel}", "", target_unit, "频道拉取")
+        stats["channel"] = channel
+        return stats
+
+    def _ingest_listing(self, ytdlp_args: list[str], search_label: str, score_query: str,
+                        target_unit: str | None, action: str) -> dict[str, Any]:
+        proc = _run(self._ytdlp(*ytdlp_args), timeout=300)
         if proc.returncode != 0:
-            raise RuntimeError(ytdlp_error_message(proc.stderr, "搜索"))
+            raise RuntimeError(ytdlp_error_message(proc.stderr, action))
         payload = json.loads(proc.stdout)
         self.db.add_traffic("metadata", len(proc.stdout.encode("utf-8")))
         entries = payload.get("entries") or []
@@ -454,7 +490,7 @@ class MediaPipeline:
             if negative_hit(str(entry.get("title") or ""), terms):
                 filtered += 1
                 continue
-            metadata = self._normalize_ytdlp(entry, query, target_unit)
+            metadata = self._normalize_ytdlp(entry, search_label, target_unit, score_query=score_query)
             if source_live_reason(metadata.get("metadata") or metadata):
                 excluded += 1
                 excluded_live += 1
@@ -481,7 +517,8 @@ class MediaPipeline:
         return self.db.add_source({"platform": platform, "video_id": video_id, "url": url, "title": url,
                                    "target_unit": target_unit, "status": "DISCOVERED"})
 
-    def _normalize_ytdlp(self, item: dict[str, Any], query: str, target_unit: str | None) -> dict[str, Any]:
+    def _normalize_ytdlp(self, item: dict[str, Any], query: str, target_unit: str | None,
+                         score_query: str | None = None) -> dict[str, Any]:
         platform = platform_of(item)
         formats = [{k: f.get(k) for k in ("format_id", "ext", "width", "height", "fps", "filesize", "vcodec", "acodec")}
                    for f in (item.get("formats") or [])]
@@ -504,7 +541,8 @@ class MediaPipeline:
             "metadata": item,
             "status": "METADATA_READY",
         }
-        result["source_score"] = source_score(item, target_unit, query, negatives=self.negative_terms)
+        result["source_score"] = source_score(item, target_unit, query if score_query is None else score_query,
+                                              negatives=self.negative_terms)
         return result
 
     def validate_proxy_source(self, source_id: int) -> dict[str, Any]:
